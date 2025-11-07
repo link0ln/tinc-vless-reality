@@ -236,8 +236,15 @@ quic_conn_t *quic_conn_new_client(quiche_config *config, const char *server_name
 	memcpy(&qconn->peer_addr, addr, addr_len);
 	qconn->peer_addr_len = addr_len;
 
+	/* Get local address from socket */
+	struct sockaddr_storage local_addr;
+	socklen_t local_addr_len = sizeof(local_addr);
+	getsockname(sock_fd, (struct sockaddr *)&local_addr, &local_addr_len);
+
 	/* Create quiche connection */
-	qconn->conn = quiche_connect(server_name, qconn->scid, qconn->scid_len, config);
+	qconn->conn = quiche_connect(server_name, qconn->scid, qconn->scid_len,
+	                             (struct sockaddr *)&local_addr, local_addr_len,
+	                             addr, addr_len, config);
 
 	if(!qconn->conn) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to create quiche client connection");
@@ -282,9 +289,16 @@ quic_conn_t *quic_conn_new_server(quiche_config *config, const uint8_t *dcid, si
 	memcpy(&qconn->peer_addr, addr, addr_len);
 	qconn->peer_addr_len = addr_len;
 
+	/* Get local address from socket */
+	struct sockaddr_storage local_addr;
+	socklen_t local_addr_len = sizeof(local_addr);
+	getsockname(sock_fd, (struct sockaddr *)&local_addr, &local_addr_len);
+
 	/* Create quiche connection */
 	qconn->conn = quiche_accept(qconn->scid, qconn->scid_len,
-	                             odcid, odcid_len, config);
+	                             odcid, odcid_len,
+	                             (struct sockaddr *)&local_addr, local_addr_len,
+	                             addr, addr_len, config);
 
 	if(!qconn->conn) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to create quiche server connection");
@@ -330,7 +344,8 @@ ssize_t quic_conn_send(quic_conn_t *qconn) {
 
 	/* Send all pending QUIC packets */
 	while(true) {
-		ssize_t written = quiche_conn_send(qconn->conn, out, sizeof(out));
+		quiche_send_info send_info;
+		ssize_t written = quiche_conn_send(qconn->conn, out, sizeof(out), &send_info);
 
 		if(written == QUICHE_ERR_DONE) {
 			break;  // No more packets to send
@@ -341,9 +356,9 @@ ssize_t quic_conn_send(quic_conn_t *qconn) {
 			return -1;
 		}
 
-		/* Send packet via UDP socket */
+		/* Send packet via UDP socket to the address specified in send_info */
 		ssize_t sent = sendto(qconn->sock_fd, out, written, 0,
-		                      (struct sockaddr *)&qconn->peer_addr, qconn->peer_addr_len);
+		                      (struct sockaddr *)&send_info.to, send_info.to_len);
 
 		if(sent != written) {
 			logger(DEBUG_PROTOCOL, LOG_WARNING, "sendto incomplete: %zd/%zd", sent, written);
@@ -363,8 +378,23 @@ ssize_t quic_conn_recv(quic_conn_t *qconn, const uint8_t *buf, size_t len) {
 		return -1;
 	}
 
+	/* Prepare recv_info structure */
+	quiche_recv_info recv_info = {
+		.from = (struct sockaddr *)&qconn->peer_addr,
+		.from_len = qconn->peer_addr_len,
+		.to = NULL,  // We'll fill this if needed
+		.to_len = 0
+	};
+
+	/* Get local address */
+	struct sockaddr_storage local_addr;
+	socklen_t local_addr_len = sizeof(local_addr);
+	getsockname(qconn->sock_fd, (struct sockaddr *)&local_addr, &local_addr_len);
+	recv_info.to = (struct sockaddr *)&local_addr;
+	recv_info.to_len = local_addr_len;
+
 	/* Feed packet to quiche */
-	ssize_t done = quiche_conn_recv(qconn->conn, (uint8_t *)buf, len);
+	ssize_t done = quiche_conn_recv(qconn->conn, (uint8_t *)buf, len, &recv_info);
 
 	if(done < 0) {
 		logger(DEBUG_PROTOCOL, LOG_ERR, "quiche_conn_recv failed: %zd", done);
@@ -417,10 +447,11 @@ bool quic_conn_send_vpn_packet(quic_conn_t *qconn, const void *data, size_t len)
 	uint64_t stream_id = qconn->next_stream_id;
 
 	/* Send data on stream */
-	ssize_t sent = quiche_conn_stream_send(qconn->conn, stream_id, (const uint8_t *)data, len, false);
+	uint64_t error_code = 0;
+	ssize_t sent = quiche_conn_stream_send(qconn->conn, stream_id, (const uint8_t *)data, len, false, &error_code);
 
 	if(sent < 0) {
-		logger(DEBUG_PROTOCOL, LOG_ERR, "quiche_conn_stream_send failed: %zd", sent);
+		logger(DEBUG_PROTOCOL, LOG_ERR, "quiche_conn_stream_send failed: %zd (error: %lu)", sent, error_code);
 		return false;
 	}
 
@@ -461,8 +492,9 @@ ssize_t quic_conn_recv_vpn_packet(quic_conn_t *qconn, void *data, size_t max_len
 		}
 
 		bool fin = false;
+		uint64_t error_code = 0;
 		ssize_t recv_len = quiche_conn_stream_recv(qconn->conn, stream_id,
-		                   (uint8_t *)data, max_len, &fin);
+		                   (uint8_t *)data, max_len, &fin, &error_code);
 
 		if(recv_len > 0) {
 			total_read = recv_len;
@@ -493,10 +525,11 @@ bool quic_conn_stream_send(quic_conn_t *qconn, uint64_t stream_id, const uint8_t
 		return false;
 	}
 
-	ssize_t sent = quiche_conn_stream_send(qconn->conn, stream_id, data, len, fin);
+	uint64_t error_code = 0;
+	ssize_t sent = quiche_conn_stream_send(qconn->conn, stream_id, data, len, fin, &error_code);
 
 	if(sent < 0) {
-		logger(DEBUG_PROTOCOL, LOG_ERR, "quiche_conn_stream_send failed: %zd", sent);
+		logger(DEBUG_PROTOCOL, LOG_ERR, "quiche_conn_stream_send failed: %zd (error: %lu)", sent, error_code);
 		return false;
 	}
 
@@ -509,10 +542,11 @@ ssize_t quic_conn_stream_recv(quic_conn_t *qconn, uint64_t stream_id, uint8_t *d
 		return -1;
 	}
 
-	ssize_t recv_len = quiche_conn_stream_recv(qconn->conn, stream_id, data, max_len, fin);
+	uint64_t error_code = 0;
+	ssize_t recv_len = quiche_conn_stream_recv(qconn->conn, stream_id, data, max_len, fin, &error_code);
 
 	if(recv_len < 0 && recv_len != QUICHE_ERR_DONE) {
-		logger(DEBUG_PROTOCOL, LOG_ERR, "quiche_conn_stream_recv failed: %zd", recv_len);
+		logger(DEBUG_PROTOCOL, LOG_ERR, "quiche_conn_stream_recv failed: %zd (error: %lu)", recv_len, error_code);
 		return -1;
 	}
 
