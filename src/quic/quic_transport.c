@@ -32,6 +32,7 @@
 #include "quic_transport.h"
 #include "quic.h"
 #include "quic_reality.h"
+#include "quic_fingerprint.h"
 
 /* Global QUIC manager */
 quic_manager_t *quic_manager = NULL;
@@ -79,6 +80,12 @@ bool quic_transport_init(int port) {
 		return false;
 	}
 
+	/* Apply browser fingerprint to client config */
+	const char *fingerprint = vless_reality_fingerprint ? vless_reality_fingerprint : "chrome";
+	if(!quic_fingerprint_apply_name(quic_manager->client_config, fingerprint)) {
+		logger(DEBUG_ALWAYS, LOG_WARNING, "Failed to apply fingerprint '%s', using defaults", fingerprint);
+	}
+
 	/* Create server configuration */
 	quic_manager->server_config = quic_config_new(true);
 
@@ -88,6 +95,11 @@ bool quic_transport_init(int port) {
 		free(quic_manager);
 		quic_manager = NULL;
 		return false;
+	}
+
+	/* Apply browser fingerprint to server config as well */
+	if(!quic_fingerprint_apply_name(quic_manager->server_config, fingerprint)) {
+		logger(DEBUG_ALWAYS, LOG_WARNING, "Failed to apply fingerprint '%s' to server", fingerprint);
 	}
 
 	/* TODO: Load TLS certificates for server */

@@ -362,8 +362,9 @@ am__tincd_SOURCES_DIST = address_cache.c address_cache.h autoconnect.c \
 	chacha-poly1305/poly1305.h vless/vless.c vless/vless.h \
 	vless/reality.c vless/reality.h quic/quic.c quic/quic.h \
 	quic/quic_transport.c quic/quic_transport.h \
-	quic/quic_reality.c quic/quic_reality.h getopt.c getopt.h \
-	getopt1.c linux/device.c bsd/device.c bsd/tunemu.c \
+	quic/quic_reality.c quic/quic_reality.h \
+	quic/quic_fingerprint.c quic/quic_fingerprint.h getopt.c \
+	getopt.h getopt1.c linux/device.c bsd/device.c bsd/tunemu.c \
 	bsd/tunemu.h solaris/device.c mingw/device.c mingw/common.h \
 	uml_device.c vde_device.c openssl/cipher.c openssl/crypto.c \
 	openssl/digest.c openssl/digest.h openssl/prf.c openssl/rsa.c \
@@ -372,7 +373,7 @@ am__tincd_SOURCES_DIST = address_cache.c address_cache.h autoconnect.c \
 	nolegacy/prf.c upnp.h upnp.c
 am__objects_13 = vless/vless.$(OBJEXT) vless/reality.$(OBJEXT)
 am__objects_14 = quic/quic.$(OBJEXT) quic/quic_transport.$(OBJEXT) \
-	quic/quic_reality.$(OBJEXT)
+	quic/quic_reality.$(OBJEXT) quic/quic_fingerprint.$(OBJEXT)
 @LINUX_TRUE@am__objects_15 = linux/device.$(OBJEXT)
 @BSD_TRUE@am__objects_16 = bsd/device.$(OBJEXT)
 @BSD_TRUE@@TUNEMU_TRUE@am__objects_17 = bsd/tunemu.$(OBJEXT)
@@ -476,6 +477,7 @@ am__depfiles_remade = ./$(DEPDIR)/address_cache.Po \
 	openssl/$(DEPDIR)/crypto.Po openssl/$(DEPDIR)/digest.Po \
 	openssl/$(DEPDIR)/prf.Po openssl/$(DEPDIR)/rsa.Po \
 	openssl/$(DEPDIR)/rsagen.Po quic/$(DEPDIR)/quic.Po \
+	quic/$(DEPDIR)/quic_fingerprint.Po \
 	quic/$(DEPDIR)/quic_reality.Po \
 	quic/$(DEPDIR)/quic_transport.Po solaris/$(DEPDIR)/device.Po \
 	vless/$(DEPDIR)/reality.Po vless/$(DEPDIR)/vless.Po
@@ -661,7 +663,8 @@ vless_SOURCES = \
 quic_SOURCES = \
 	quic/quic.c quic/quic.h \
 	quic/quic_transport.c quic/quic_transport.h \
-	quic/quic_reality.c quic/quic_reality.h
+	quic/quic_reality.c quic/quic_reality.h \
+	quic/quic_fingerprint.c quic/quic_fingerprint.h
 
 tincd_SOURCES = address_cache.c address_cache.h autoconnect.c \
 	autoconnect.h buffer.c buffer.h cipher.h conf.c conf.h \
@@ -929,6 +932,8 @@ quic/quic_transport.$(OBJEXT): quic/$(am__dirstamp) \
 	quic/$(DEPDIR)/$(am__dirstamp)
 quic/quic_reality.$(OBJEXT): quic/$(am__dirstamp) \
 	quic/$(DEPDIR)/$(am__dirstamp)
+quic/quic_fingerprint.$(OBJEXT): quic/$(am__dirstamp) \
+	quic/$(DEPDIR)/$(am__dirstamp)
 linux/$(am__dirstamp):
 	@$(MKDIR_P) linux
 	@: > linux/$(am__dirstamp)
@@ -1073,6 +1078,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@openssl/$(DEPDIR)/rsa.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@openssl/$(DEPDIR)/rsagen.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@quic/$(DEPDIR)/quic.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@quic/$(DEPDIR)/quic_fingerprint.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@quic/$(DEPDIR)/quic_reality.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@quic/$(DEPDIR)/quic_transport.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@solaris/$(DEPDIR)/device.Po@am__quote@ # am--include-marker
@@ -1340,6 +1346,7 @@ distclean: distclean-am
 	-rm -f openssl/$(DEPDIR)/rsa.Po
 	-rm -f openssl/$(DEPDIR)/rsagen.Po
 	-rm -f quic/$(DEPDIR)/quic.Po
+	-rm -f quic/$(DEPDIR)/quic_fingerprint.Po
 	-rm -f quic/$(DEPDIR)/quic_reality.Po
 	-rm -f quic/$(DEPDIR)/quic_transport.Po
 	-rm -f solaris/$(DEPDIR)/device.Po
@@ -1478,6 +1485,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f openssl/$(DEPDIR)/rsa.Po
 	-rm -f openssl/$(DEPDIR)/rsagen.Po
 	-rm -f quic/$(DEPDIR)/quic.Po
+	-rm -f quic/$(DEPDIR)/quic_fingerprint.Po
 	-rm -f quic/$(DEPDIR)/quic_reality.Po
 	-rm -f quic/$(DEPDIR)/quic_transport.Po
 	-rm -f solaris/$(DEPDIR)/device.Po
