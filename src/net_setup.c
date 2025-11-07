@@ -42,6 +42,7 @@
 #include "subnet.h"
 #include "utils.h"
 #include "xalloc.h"
+#include "quic/quic_transport.h"
 
 #ifdef HAVE_MINIUPNPC
 #include "upnp.h"
@@ -1308,6 +1309,45 @@ bool setup_network(void) {
 		return false;
 	}
 
+	/* Initialize QUIC transport if enabled */
+	int quic_port = 443;  /* Default HTTPS port for QUIC */
+	get_config_int(lookup_config(config_tree, "QuicPort"), &quic_port);
+
+	transport_mode_t mode = TRANSPORT_UDP;  /* Default to classic UDP */
+	char *transport_mode_str = NULL;
+	if(get_config_string(lookup_config(config_tree, "TransportMode"), &transport_mode_str)) {
+		if(!strcasecmp(transport_mode_str, "quic")) {
+			mode = TRANSPORT_QUIC;
+		} else if(!strcasecmp(transport_mode_str, "hybrid")) {
+			mode = TRANSPORT_HYBRID;
+		} else if(!strcasecmp(transport_mode_str, "tcp")) {
+			mode = TRANSPORT_TCP;
+		}
+		free(transport_mode_str);
+	}
+
+	quic_transport_set_mode(mode);
+
+	if(mode == TRANSPORT_QUIC || mode == TRANSPORT_HYBRID) {
+		if(!quic_transport_init(quic_port)) {
+			logger(DEBUG_ALWAYS, LOG_ERR, "Failed to initialize QUIC transport");
+			if(mode == TRANSPORT_QUIC) {
+				return false;  /* Fatal if QUIC-only mode */
+			}
+			/* Continue with fallback if HYBRID mode */
+		} else {
+			/* Register QUIC UDP socket in event loop */
+			if(quic_manager && quic_manager->udp_fd >= 0) {
+				io_add(&(io_t) {
+					.fd = quic_manager->udp_fd,
+					.cb = handle_incoming_quic_data,
+					.data = NULL,
+					.flags = IO_READ
+				}, handle_incoming_quic_data, NULL, quic_manager->udp_fd, IO_READ);
+			}
+		}
+	}
+
 	if(!init_control()) {
 		return false;
 	}
@@ -1354,6 +1394,11 @@ void close_network_connections(void) {
 		io_del(&listen_socket[i].udp);
 		close(listen_socket[i].tcp.fd);
 		close(listen_socket[i].udp.fd);
+	}
+
+	/* Cleanup QUIC transport */
+	if(quic_transport_is_enabled()) {
+		quic_transport_exit();
 	}
 
 	exit_requests();

@@ -49,6 +49,7 @@
 #include "route.h"
 #include "utils.h"
 #include "xalloc.h"
+#include "quic/quic_transport.h"
 
 #ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -839,6 +840,16 @@ static void send_udppacket(node_t *n, vpn_packet_t *origpkt) {
 		default:
 			break;
 		}
+	}
+
+	/* Try QUIC transport if enabled */
+	if(quic_transport_is_enabled()) {
+		if(quic_transport_send_packet(n, origpkt)) {
+			logger(DEBUG_TRAFFIC, LOG_DEBUG, "Sent packet to %s via QUIC", n->name);
+			goto end;
+		}
+		/* QUIC send failed, fall back to UDP */
+		logger(DEBUG_TRAFFIC, LOG_DEBUG, "QUIC send failed for %s, falling back to UDP", n->name);
 	}
 
 	if(sendto(listen_socket[sock].udp.fd, (void *)SEQNO(inpkt), inpkt->len, 0, &sa->sa, SALEN(sa->sa)) < 0 && !sockwouldblock(sockerrno)) {

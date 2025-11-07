@@ -361,15 +361,16 @@ am__tincd_SOURCES_DIST = address_cache.c address_cache.h autoconnect.c \
 	chacha-poly1305/chacha-poly1305.h chacha-poly1305/poly1305.c \
 	chacha-poly1305/poly1305.h vless/vless.c vless/vless.h \
 	vless/reality.c vless/reality.h quic/quic.c quic/quic.h \
-	getopt.c getopt.h getopt1.c linux/device.c bsd/device.c \
-	bsd/tunemu.c bsd/tunemu.h solaris/device.c mingw/device.c \
-	mingw/common.h uml_device.c vde_device.c openssl/cipher.c \
-	openssl/crypto.c openssl/digest.c openssl/digest.h \
-	openssl/prf.c openssl/rsa.c gcrypt/cipher.c gcrypt/crypto.c \
-	gcrypt/digest.c gcrypt/digest.h gcrypt/prf.c gcrypt/rsa.c \
-	nolegacy/crypto.c nolegacy/prf.c upnp.h upnp.c
+	quic/quic_transport.c quic/quic_transport.h \
+	quic/quic_reality.h getopt.c getopt.h getopt1.c linux/device.c \
+	bsd/device.c bsd/tunemu.c bsd/tunemu.h solaris/device.c \
+	mingw/device.c mingw/common.h uml_device.c vde_device.c \
+	openssl/cipher.c openssl/crypto.c openssl/digest.c \
+	openssl/digest.h openssl/prf.c openssl/rsa.c gcrypt/cipher.c \
+	gcrypt/crypto.c gcrypt/digest.c gcrypt/digest.h gcrypt/prf.c \
+	gcrypt/rsa.c nolegacy/crypto.c nolegacy/prf.c upnp.h upnp.c
 am__objects_13 = vless/vless.$(OBJEXT) vless/reality.$(OBJEXT)
-am__objects_14 = quic/quic.$(OBJEXT)
+am__objects_14 = quic/quic.$(OBJEXT) quic/quic_transport.$(OBJEXT)
 @LINUX_TRUE@am__objects_15 = linux/device.$(OBJEXT)
 @BSD_TRUE@am__objects_16 = bsd/device.$(OBJEXT)
 @BSD_TRUE@@TUNEMU_TRUE@am__objects_17 = bsd/tunemu.$(OBJEXT)
@@ -473,8 +474,8 @@ am__depfiles_remade = ./$(DEPDIR)/address_cache.Po \
 	openssl/$(DEPDIR)/crypto.Po openssl/$(DEPDIR)/digest.Po \
 	openssl/$(DEPDIR)/prf.Po openssl/$(DEPDIR)/rsa.Po \
 	openssl/$(DEPDIR)/rsagen.Po quic/$(DEPDIR)/quic.Po \
-	solaris/$(DEPDIR)/device.Po vless/$(DEPDIR)/reality.Po \
-	vless/$(DEPDIR)/vless.Po
+	quic/$(DEPDIR)/quic_transport.Po solaris/$(DEPDIR)/device.Po \
+	vless/$(DEPDIR)/reality.Po vless/$(DEPDIR)/vless.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -655,7 +656,9 @@ vless_SOURCES = \
 	vless/reality.c vless/reality.h
 
 quic_SOURCES = \
-	quic/quic.c quic/quic.h
+	quic/quic.c quic/quic.h \
+	quic/quic_transport.c quic/quic_transport.h \
+	quic/quic_reality.h
 
 tincd_SOURCES = address_cache.c address_cache.h autoconnect.c \
 	autoconnect.h buffer.c buffer.h cipher.h conf.c conf.h \
@@ -919,6 +922,8 @@ quic/$(DEPDIR)/$(am__dirstamp):
 	@: > quic/$(DEPDIR)/$(am__dirstamp)
 quic/quic.$(OBJEXT): quic/$(am__dirstamp) \
 	quic/$(DEPDIR)/$(am__dirstamp)
+quic/quic_transport.$(OBJEXT): quic/$(am__dirstamp) \
+	quic/$(DEPDIR)/$(am__dirstamp)
 linux/$(am__dirstamp):
 	@$(MKDIR_P) linux
 	@: > linux/$(am__dirstamp)
@@ -1063,6 +1068,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@openssl/$(DEPDIR)/rsa.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@openssl/$(DEPDIR)/rsagen.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@quic/$(DEPDIR)/quic.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@quic/$(DEPDIR)/quic_transport.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@solaris/$(DEPDIR)/device.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@vless/$(DEPDIR)/reality.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@vless/$(DEPDIR)/vless.Po@am__quote@ # am--include-marker
@@ -1328,6 +1334,7 @@ distclean: distclean-am
 	-rm -f openssl/$(DEPDIR)/rsa.Po
 	-rm -f openssl/$(DEPDIR)/rsagen.Po
 	-rm -f quic/$(DEPDIR)/quic.Po
+	-rm -f quic/$(DEPDIR)/quic_transport.Po
 	-rm -f solaris/$(DEPDIR)/device.Po
 	-rm -f vless/$(DEPDIR)/reality.Po
 	-rm -f vless/$(DEPDIR)/vless.Po
@@ -1464,6 +1471,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f openssl/$(DEPDIR)/rsa.Po
 	-rm -f openssl/$(DEPDIR)/rsagen.Po
 	-rm -f quic/$(DEPDIR)/quic.Po
+	-rm -f quic/$(DEPDIR)/quic_transport.Po
 	-rm -f solaris/$(DEPDIR)/device.Po
 	-rm -f vless/$(DEPDIR)/reality.Po
 	-rm -f vless/$(DEPDIR)/vless.Po
