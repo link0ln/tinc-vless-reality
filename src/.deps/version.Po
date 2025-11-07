@@ -1,0 +1,6 @@
+version.o: version.c /usr/include/stdc-predef.h version.h version_git.h \
+ ../config.h
+/usr/include/stdc-predef.h:
+version.h:
+version_git.h:
+../config.h:
