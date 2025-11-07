@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # Node 1 - VLESS Server with Reality
+  node1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: tinc-node1
+    hostname: node1
+    networks:
+      tinc_net:
+        ipv4_address: 172.25.0.10
+    volumes:
+      - ./node1/tinc:/etc/tinc/testvpn
+      - ./node1/logs:/var/log/tinc
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      - NODE_NAME=node1
+      - TINC_NETWORK=testvpn
+      - VLESS_MODE=yes
+      - REALITY_MODE=yes
+    ports:
+      - "6551:655"
+    stdin_open: true
+    tty: true
+
+  # Node 2 - VLESS Client connecting to Node1
+  node2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: tinc-node2
+    hostname: node2
+    networks:
+      tinc_net:
+        ipv4_address: 172.25.0.11
+    volumes:
+      - ./node2/tinc:/etc/tinc/testvpn
+      - ./node2/logs:/var/log/tinc
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      - NODE_NAME=node2
+      - TINC_NETWORK=testvpn
+      - VLESS_MODE=yes
+      - REALITY_MODE=yes
+    ports:
+      - "6552:655"
+    depends_on:
+      - node1
+    stdin_open: true
+    tty: true
+
+  # Node 3 - VLESS Client connecting to both
+  node3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: tinc-node3
+    hostname: node3
+    networks:
+      tinc_net:
+        ipv4_address: 172.25.0.12
+    volumes:
+      - ./node3/tinc:/etc/tinc/testvpn
+      - ./node3/logs:/var/log/tinc
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      - NODE_NAME=node3
+      - TINC_NETWORK=testvpn
+      - VLESS_MODE=yes
+      - REALITY_MODE=yes
+    ports:
+      - "6553:655"
+    depends_on:
+      - node1
+      - node2
+    stdin_open: true
+    tty: true
+
+networks:
+  tinc_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
