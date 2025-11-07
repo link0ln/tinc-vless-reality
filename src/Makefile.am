@@ -45,6 +45,9 @@ vless_SOURCES = \
 	vless/vless.c vless/vless.h \
 	vless/reality.c vless/reality.h
 
+quic_SOURCES = \
+	quic/quic.c quic/quic.h
+
 tincd_SOURCES = \
 	address_cache.c address_cache.h \
 	autoconnect.c autoconnect.h \
@@ -108,7 +111,8 @@ tincd_SOURCES = \
 	ed25519/ecdsa.c \
 	$(ed25519_SOURCES) \
 	$(chacha_poly1305_SOURCES) \
-	$(vless_SOURCES)
+	$(vless_SOURCES) \
+	$(quic_SOURCES)
 
 tinc_SOURCES = \
 	dropin.c dropin.h \
@@ -286,5 +290,9 @@ if TUNEMU
 LIBS += -lpcap
 endif
 
-AM_CFLAGS = -DCONFDIR=\"$(sysconfdir)\" -DRUNSTATEDIR=\"$(runstatedir)\" -DLOCALSTATEDIR=\"$(localstatedir)\" -DSBINDIR=\"$(sbindir)\" -iquote. $(CODE_COVERAGE_CFLAGS)
+AM_CFLAGS = -DCONFDIR=\"$(sysconfdir)\" -DRUNSTATEDIR=\"$(runstatedir)\" -DLOCALSTATEDIR=\"$(localstatedir)\" -DSBINDIR=\"$(sbindir)\" -iquote. -I$(top_srcdir)/deps/quiche/quiche/include $(CODE_COVERAGE_CFLAGS)
 AM_CPPFLAGS = $(CODE_COVERAGE_CPPFLAGS)
+
+# QUIC support via quiche
+QUICHE_LIBS = $(top_srcdir)/deps/quiche/target/release/libquiche.so -lpthread -ldl
+tincd_LDADD += $(QUICHE_LIBS)
