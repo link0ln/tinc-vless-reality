@@ -328,6 +328,20 @@ void quic_conn_free(quic_conn_t *qconn) {
 		// TODO: free reality context
 	}
 
+	/* Free all buffered packets */
+	buffered_packet_t *bp = qconn->send_buf_head;
+
+	while(bp) {
+		buffered_packet_t *next = bp->next;
+		free(bp);
+		bp = next;
+	}
+
+	if(qconn->send_buf_count > 0) {
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Dropped %zu buffered packets on connection close",
+		       qconn->send_buf_count);
+	}
+
 	logger(DEBUG_PROTOCOL, LOG_DEBUG, "Freed QUIC connection");
 
 	free(qconn);
@@ -341,6 +355,7 @@ ssize_t quic_conn_send(quic_conn_t *qconn) {
 
 	uint8_t out[1350];  // MTU-safe packet size
 	ssize_t total_sent = 0;
+	int packet_count = 0;
 
 	/* Send all pending QUIC packets */
 	while(true) {
@@ -356,17 +371,41 @@ ssize_t quic_conn_send(quic_conn_t *qconn) {
 			return -1;
 		}
 
+		/* Log destination details */
+		char dest_addr[INET6_ADDRSTRLEN];
+		int dest_port = 0;
+		if(send_info.to.ss_family == AF_INET) {
+			struct sockaddr_in *sin = (struct sockaddr_in *)&send_info.to;
+			inet_ntop(AF_INET, &sin->sin_addr, dest_addr, sizeof(dest_addr));
+			dest_port = ntohs(sin->sin_port);
+		} else if(send_info.to.ss_family == AF_INET6) {
+			struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&send_info.to;
+			inet_ntop(AF_INET6, &sin6->sin6_addr, dest_addr, sizeof(dest_addr));
+			dest_port = ntohs(sin6->sin6_port);
+		}
+
+		logger(DEBUG_PROTOCOL, LOG_INFO, "Sending QUIC packet: %zd bytes to %s:%d via socket fd=%d (first_byte=0x%02x)",
+		       written, dest_addr, dest_port, qconn->sock_fd, out[0]);
+
 		/* Send packet via UDP socket to the address specified in send_info */
 		ssize_t sent = sendto(qconn->sock_fd, out, written, 0,
 		                      (struct sockaddr *)&send_info.to, send_info.to_len);
 
 		if(sent != written) {
-			logger(DEBUG_PROTOCOL, LOG_WARNING, "sendto incomplete: %zd/%zd", sent, written);
+			logger(DEBUG_PROTOCOL, LOG_WARNING, "sendto incomplete or failed: %zd/%zd (errno=%d: %s)",
+			       sent, written, errno, strerror(errno));
+		} else {
+			logger(DEBUG_PROTOCOL, LOG_INFO, "sendto() successful: %zd bytes sent", sent);
 		}
 
 		qconn->bytes_sent += sent;
 		qconn->packets_sent++;
 		total_sent += sent;
+		packet_count++;
+	}
+
+	if(packet_count > 0) {
+		logger(DEBUG_PROTOCOL, LOG_INFO, "Sent %d QUIC packets, %zd bytes total", packet_count, total_sent);
 	}
 
 	return total_sent;
@@ -483,14 +522,9 @@ ssize_t quic_conn_recv_vpn_packet(quic_conn_t *qconn, void *data, size_t max_len
 	}
 
 	ssize_t total_read = 0;
+	uint64_t stream_id = 0;
 
-	while(quiche_stream_iter_next(readable, NULL)) {
-		uint64_t stream_id = 0;
-
-		if(!quiche_stream_iter_next(readable, &stream_id)) {
-			break;
-		}
-
+	while(quiche_stream_iter_next(readable, &stream_id)) {
 		bool fin = false;
 		uint64_t error_code = 0;
 		ssize_t recv_len = quiche_conn_stream_recv(qconn->conn, stream_id,
@@ -505,6 +539,75 @@ ssize_t quic_conn_recv_vpn_packet(quic_conn_t *qconn, void *data, size_t max_len
 	quiche_stream_iter_free(readable);
 
 	return total_read;
+}
+
+/* Buffer VPN packet during handshake */
+bool quic_conn_buffer_vpn_packet(quic_conn_t *qconn, const void *data, size_t len) {
+	if(!qconn || !data || len == 0 || len > sizeof(((buffered_packet_t *)0)->data)) {
+		return false;
+	}
+
+	/* Limit buffer size to prevent memory exhaustion */
+	#define MAX_BUFFERED_PACKETS 100
+	if(qconn->send_buf_count >= MAX_BUFFERED_PACKETS) {
+		logger(DEBUG_PROTOCOL, LOG_WARNING, "QUIC send buffer full, dropping packet");
+		return false;
+	}
+
+	/* Allocate new buffered packet */
+	buffered_packet_t *bp = xmalloc(sizeof(buffered_packet_t));
+	memcpy(bp->data, data, len);
+	bp->len = len;
+	bp->next = NULL;
+
+	/* Add to tail of queue */
+	if(qconn->send_buf_tail) {
+		qconn->send_buf_tail->next = bp;
+	} else {
+		qconn->send_buf_head = bp;
+	}
+
+	qconn->send_buf_tail = bp;
+	qconn->send_buf_count++;
+
+	logger(DEBUG_PROTOCOL, LOG_DEBUG, "Buffered VPN packet (%zu bytes), queue size: %zu",
+	       len, qconn->send_buf_count);
+
+	return true;
+}
+
+/* Send all buffered packets after handshake completes */
+void quic_conn_flush_buffered_packets(quic_conn_t *qconn) {
+	if(!qconn || !quic_conn_is_established(qconn)) {
+		return;
+	}
+
+	size_t sent = 0;
+	size_t failed = 0;
+
+	buffered_packet_t *bp = qconn->send_buf_head;
+
+	while(bp) {
+		buffered_packet_t *next = bp->next;
+
+		if(quic_conn_send_vpn_packet(qconn, bp->data, bp->len)) {
+			sent++;
+		} else {
+			failed++;
+		}
+
+		free(bp);
+		bp = next;
+	}
+
+	qconn->send_buf_head = NULL;
+	qconn->send_buf_tail = NULL;
+	qconn->send_buf_count = 0;
+
+	if(sent > 0 || failed > 0) {
+		logger(DEBUG_PROTOCOL, LOG_INFO, "Flushed buffered packets: %zu sent, %zu failed",
+		       sent, failed);
+	}
 }
 
 /* Open new stream */

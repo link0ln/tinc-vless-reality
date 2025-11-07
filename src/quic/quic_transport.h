@@ -29,6 +29,9 @@
 struct node_t;
 struct vpn_packet_t;
 
+/* Forward declaration for listen_socket_t */
+struct listen_socket_t;
+
 /* QUIC transport manager */
 typedef struct quic_manager_t {
 	/* Configuration */
@@ -39,10 +42,12 @@ typedef struct quic_manager_t {
 	/* Connection mapping: node_t* -> quic_conn_t* */
 	splay_tree_t *connections;
 
-	/* UDP socket for QUIC */
-	int udp_fd;
-	struct sockaddr_storage local_addr;
-	socklen_t local_addr_len;
+	/* Connection ID demultiplexing: DCID -> quic_conn_t* */
+	splay_tree_t *conn_id_map;
+
+	/* UDP sockets from tinc (shared with native protocol) */
+	struct listen_socket_t **sockets;
+	int num_sockets;
 
 	/* Statistics */
 	uint64_t packets_sent;
@@ -72,7 +77,7 @@ extern transport_mode_t transport_mode;
 /* Function prototypes */
 
 /* Initialize/cleanup QUIC transport */
-extern bool quic_transport_init(int port);
+extern bool quic_transport_init(struct listen_socket_t *sockets, int num_sockets);
 extern void quic_transport_exit(void);
 
 /* Connection management */

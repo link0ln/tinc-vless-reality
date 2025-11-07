@@ -287,7 +287,7 @@ static length_t uncompress_packet(uint8_t *dest, const uint8_t *source, length_t
 
 /* VPN packet I/O */
 
-static void receive_packet(node_t *n, vpn_packet_t *packet) {
+void receive_packet(node_t *n, vpn_packet_t *packet) {
 	logger(DEBUG_TRAFFIC, LOG_DEBUG, "Received packet of %d bytes from %s (%s)",
 	       packet->len, n->name, n->hostname);
 
@@ -848,7 +848,15 @@ static void send_udppacket(node_t *n, vpn_packet_t *origpkt) {
 			logger(DEBUG_TRAFFIC, LOG_DEBUG, "Sent packet to %s via QUIC", n->name);
 			goto end;
 		}
-		/* QUIC send failed, fall back to UDP */
+
+		/* QUIC send failed, check transport mode for fallback */
+		if(transport_mode == TRANSPORT_QUIC) {
+			/* QUIC-only mode, no fallback allowed */
+			logger(DEBUG_TRAFFIC, LOG_WARNING, "QUIC send failed for %s, TransportMode=quic, dropping packet", n->name);
+			goto end;
+		}
+
+		/* Hybrid mode or UDP mode, fall back to UDP */
 		logger(DEBUG_TRAFFIC, LOG_DEBUG, "QUIC send failed for %s, falling back to UDP", n->name);
 	}
 
@@ -949,6 +957,20 @@ bool send_sptps_data(node_t *to, node_t *from, int type, const void *data, size_
 	}
 
 	logger(DEBUG_TRAFFIC, LOG_INFO, "Sending packet from %s (%s) to %s (%s) via %s (%s) (UDP)", from->name, from->hostname, to->name, to->hostname, relay->name, relay->hostname);
+
+	/* Try QUIC transport if enabled */
+	if(quic_transport_is_enabled()) {
+		vpn_packet_t quic_pkt;
+		quic_pkt.offset = 0;  /* IMPORTANT: initialize offset for DATA() macro */
+		quic_pkt.len = buf_ptr - buf;
+		memcpy(DATA(&quic_pkt), buf, quic_pkt.len);
+
+		if(quic_transport_send_packet(relay, &quic_pkt)) {
+			logger(DEBUG_TRAFFIC, LOG_INFO, "Sent SPTPS packet to %s via QUIC", relay->name);
+			return true;
+		}
+		logger(DEBUG_TRAFFIC, LOG_DEBUG, "QUIC send failed for %s, falling back to UDP", relay->name);
+	}
 
 	if(sendto(listen_socket[sock].udp.fd, buf, buf_ptr - buf, 0, &sa->sa, SALEN(sa->sa)) < 0 && !sockwouldblock(sockerrno)) {
 		if(sockmsgsize(sockerrno)) {
@@ -1738,6 +1760,34 @@ skip_harder:
 	}
 }
 
+/* Helper function to detect QUIC packets
+ * QUIC packets have specific patterns in their first byte:
+ * - Long Header (Initial, Handshake, 0-RTT, Retry): bit 7 set (0x80-0xFF)
+ * - Short Header (1-RTT protected): bit 7 clear, but bits 6-5 = 01 (0x40-0x7F)
+ */
+static inline bool is_quic_packet(const uint8_t *data, size_t len) {
+	if(len < 1) {
+		return false;
+	}
+
+	uint8_t first_byte = data[0];
+
+	/* Long Header packets: bit 7 is set */
+	if(first_byte & 0x80) {
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Detected QUIC Long Header packet: first_byte=0x%02x", first_byte);
+		return true;
+	}
+
+	/* Short Header packets: bit 7 clear, bit 6 set (fixed bit) */
+	if(first_byte & 0x40) {
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Detected QUIC Short Header packet: first_byte=0x%02x", first_byte);
+		return true;
+	}
+
+	logger(DEBUG_PROTOCOL, LOG_DEBUG, "NOT a QUIC packet: first_byte=0x%02x, len=%zu", first_byte, len);
+	return false;
+}
+
 void handle_incoming_vpn_data(void *data, int flags) {
 	(void)data;
 	(void)flags;
@@ -1761,7 +1811,7 @@ void handle_incoming_vpn_data(void *data, int flags) {
 
 		msg[i].msg_hdr = (struct msghdr) {
 			.msg_name = &addr[i].sa,
-			.msg_namelen = sizeof(addr)[i],
+			.msg_namelen = sizeof(addr[i]),
 			.msg_iov = &iov[i],
 			.msg_iovlen = 1,
 		};
@@ -1784,7 +1834,16 @@ void handle_incoming_vpn_data(void *data, int flags) {
 			continue;
 		}
 
-		handle_incoming_vpn_packet(ls, &pkt[i], &addr[i]);
+		/* Packet demultiplexing: check if this is a QUIC packet */
+		if(quic_transport_is_enabled() && is_quic_packet(DATA(&pkt[i]), pkt[i].len)) {
+			/* Route to QUIC transport handler */
+			socklen_t addrlen = msg[i].msg_hdr.msg_namelen;
+			quic_transport_handle_packet(DATA(&pkt[i]), pkt[i].len,
+			                              (struct sockaddr *)&addr[i].sa, addrlen);
+		} else {
+			/* Route to native tinc packet handler */
+			handle_incoming_vpn_packet(ls, &pkt[i], &addr[i]);
+		}
 	}
 
 #else
@@ -1805,7 +1864,14 @@ void handle_incoming_vpn_data(void *data, int flags) {
 
 	pkt.len = len;
 
-	handle_incoming_vpn_packet(ls, &pkt, &addr);
+	/* Packet demultiplexing: check if this is a QUIC packet */
+	if(quic_transport_is_enabled() && is_quic_packet(DATA(&pkt), pkt.len)) {
+		/* Route to QUIC transport handler */
+		quic_transport_handle_packet(DATA(&pkt), pkt.len, &addr.sa, addrlen);
+	} else {
+		/* Route to native tinc packet handler */
+		handle_incoming_vpn_packet(ls, &pkt, &addr);
+	}
 #endif
 }
 

@@ -34,6 +34,13 @@ typedef enum quic_state_t {
 	QUIC_STATE_CLOSED
 } quic_state_t;
 
+/* Buffered packet during handshake */
+typedef struct buffered_packet_t {
+	uint8_t data[2048];
+	size_t len;
+	struct buffered_packet_t *next;
+} buffered_packet_t;
+
 /* QUIC Connection Context */
 typedef struct quic_conn_t {
 	quiche_conn *conn;              // quiche connection
@@ -65,6 +72,11 @@ typedef struct quic_conn_t {
 	uint8_t recv_buf[65536];
 	size_t recv_buf_len;
 	size_t recv_buf_pos;
+
+	/* Send buffering during handshake */
+	buffered_packet_t *send_buf_head;  // first buffered packet
+	buffered_packet_t *send_buf_tail;  // last buffered packet
+	size_t send_buf_count;             // number of buffered packets
 
 	/* Stream management */
 	uint64_t next_stream_id;        // next stream ID to use
@@ -142,6 +154,8 @@ extern bool quic_conn_is_closed(quic_conn_t *qconn);
 /* VPN data transfer */
 extern bool quic_conn_send_vpn_packet(quic_conn_t *qconn, const void *data, size_t len);
 extern ssize_t quic_conn_recv_vpn_packet(quic_conn_t *qconn, void *data, size_t max_len);
+extern bool quic_conn_buffer_vpn_packet(quic_conn_t *qconn, const void *data, size_t len);
+extern void quic_conn_flush_buffered_packets(quic_conn_t *qconn);
 
 /* Stream management */
 extern uint64_t quic_conn_open_stream(quic_conn_t *qconn);

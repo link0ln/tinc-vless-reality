@@ -189,6 +189,7 @@ extern int setup_vpn_in_socket(const sockaddr_t *sa);
 extern bool send_sptps_data(node_t *to, node_t *from, int type, const void *data, size_t len);
 extern bool receive_sptps_record(void *handle, uint8_t type, const void *data, uint16_t len);
 extern void send_packet(struct node_t *n, vpn_packet_t *packet);
+extern void receive_packet(struct node_t *n, vpn_packet_t *packet);
 extern void receive_tcppacket(struct connection_t *c, const char *buffer, size_t length);
 extern bool receive_tcppacket_sptps(struct connection_t *c, const char *buffer, size_t length);
 extern void broadcast_packet(const struct node_t *n, vpn_packet_t *packet);

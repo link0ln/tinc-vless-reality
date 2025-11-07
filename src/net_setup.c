@@ -1310,9 +1310,6 @@ bool setup_network(void) {
 	}
 
 	/* Initialize QUIC transport if enabled */
-	int quic_port = 443;  /* Default HTTPS port for QUIC */
-	get_config_int(lookup_config(config_tree, "QuicPort"), &quic_port);
-
 	transport_mode_t mode = TRANSPORT_UDP;  /* Default to classic UDP */
 	char *transport_mode_str = NULL;
 	if(get_config_string(lookup_config(config_tree, "TransportMode"), &transport_mode_str)) {
@@ -1326,25 +1323,27 @@ bool setup_network(void) {
 		free(transport_mode_str);
 	}
 
-	quic_transport_set_mode(mode);
+	/* Validate QUIC + TCPonly conflict */
+	if((mode == TRANSPORT_QUIC || mode == TRANSPORT_HYBRID) && (myself->options & OPTION_TCPONLY)) {
+		logger(DEBUG_ALWAYS, LOG_ERR, "QUIC transport mode requires UDP, but TCPonly is enabled. Disable TCPonly to use QUIC.");
+		return false;
+	}
 
 	if(mode == TRANSPORT_QUIC || mode == TRANSPORT_HYBRID) {
-		if(!quic_transport_init(quic_port)) {
+		/* Pass tinc's existing UDP sockets to QUIC instead of creating separate ones */
+		if(!quic_transport_init(listen_socket, listen_sockets)) {
 			logger(DEBUG_ALWAYS, LOG_ERR, "Failed to initialize QUIC transport");
 			if(mode == TRANSPORT_QUIC) {
 				return false;  /* Fatal if QUIC-only mode */
 			}
 			/* Continue with fallback if HYBRID mode */
 		} else {
-			/* Register QUIC UDP socket in event loop */
-			if(quic_manager && quic_manager->udp_fd >= 0) {
-				io_add(&(io_t) {
-					.fd = quic_manager->udp_fd,
-					.cb = handle_incoming_quic_data,
-					.data = NULL,
-					.flags = IO_READ
-				}, handle_incoming_quic_data, NULL, quic_manager->udp_fd, IO_READ);
-			}
+			/* Set transport mode AFTER initialization */
+			quic_transport_set_mode(mode);
+
+			/* Note: QUIC packets are now handled via packet demultiplexing
+			 * in handle_incoming_vpn_data(), not via separate socket callback */
+			logger(DEBUG_ALWAYS, LOG_INFO, "QUIC transport will use shared UDP sockets with packet demultiplexing");
 		}
 	}
 

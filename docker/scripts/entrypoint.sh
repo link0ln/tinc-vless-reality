@@ -41,6 +41,24 @@ if [ ! -e /dev/net/tun ]; then
     chmod 600 /dev/net/tun
 fi
 
+# Generate TLS certificate for QUIC if not exists
+CERT_FILE="/etc/tinc/$NETWORK/quic-cert.pem"
+KEY_FILE="/etc/tinc/$NETWORK/quic-key.pem"
+
+if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
+    echo "Generating self-signed TLS certificate for QUIC..."
+    openssl req -x509 -newkey rsa:2048 -nodes \
+        -keyout "$KEY_FILE" \
+        -out "$CERT_FILE" \
+        -days 3650 \
+        -subj "/C=US/ST=State/L=City/O=TincVPN/CN=localhost" \
+        2>/dev/null
+    echo "TLS certificate generated: $CERT_FILE"
+    echo "TLS private key generated: $KEY_FILE"
+else
+    echo "TLS certificate already exists: $CERT_FILE"
+fi
+
 # Execute tincd with all arguments and network name
 echo "Starting tincd with network: $NETWORK"
 exec tincd -n "$NETWORK" -D -d5

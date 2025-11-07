@@ -24,7 +24,7 @@ services:
       - VLESS_MODE=yes
       - REALITY_MODE=yes
     ports:
-      - "6551:655"
+      - "6551:443"
     stdin_open: true
     tty: true
 
@@ -51,7 +51,7 @@ services:
       - VLESS_MODE=yes
       - REALITY_MODE=yes
     ports:
-      - "6552:655"
+      - "6552:443"
     depends_on:
       - node1
     stdin_open: true
@@ -80,7 +80,7 @@ services:
       - VLESS_MODE=yes
       - REALITY_MODE=yes
     ports:
-      - "6553:655"
+      - "6553:443"
     depends_on:
       - node1
       - node2
