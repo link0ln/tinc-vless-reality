@@ -1,5 +1,5 @@
-net_setup.o: net_setup.c /usr/include/stdc-predef.h system.h ../config.h \
- have.h /usr/include/stdio.h \
+quic/quic_reality.o: quic/quic_reality.c /usr/include/stdc-predef.h \
+ system.h ../config.h have.h /usr/include/stdio.h \
  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
  /usr/include/features.h /usr/include/features-time64.h \
  /usr/include/x86_64-linux-gnu/bits/wordsize.h \
@@ -184,10 +184,10 @@ net_setup.o: net_setup.c /usr/include/stdc-predef.h system.h ../config.h \
  /usr/include/x86_64-linux-gnu/bits/types/res_state.h \
  /usr/include/linux/if_tun.h /usr/include/linux/filter.h \
  /usr/include/linux/bpf_common.h /usr/include/getopt.h \
- /usr/include/x86_64-linux-gnu/bits/getopt_ext.h dropin.h cipher.h conf.h \
- list.h splay_tree.h subnet.h net.h ipv6.h digest.h event.h connection.h \
- buffer.h rsa.h sptps.h chacha-poly1305/chacha-poly1305.h ecdh.h ecdsa.h \
- vless/vless.h system.h vless/reality.h /usr/include/openssl/ssl.h \
+ /usr/include/x86_64-linux-gnu/bits/getopt_ext.h dropin.h \
+ quic/../logger.h quic/../xalloc.h quic/../crypto.h quic/quic_reality.h \
+ quic/quic.h ../deps/quiche/quiche/include/quiche.h \
+ quic/../vless/reality.h /usr/include/openssl/ssl.h \
  /usr/include/openssl/macros.h \
  /usr/include/x86_64-linux-gnu/openssl/opensslconf.h \
  /usr/include/x86_64-linux-gnu/openssl/configuration.h \
@@ -228,11 +228,7 @@ net_setup.o: net_setup.c /usr/include/stdc-predef.h system.h ../config.h \
  /usr/include/openssl/sslerr.h /usr/include/openssl/sslerr_legacy.h \
  /usr/include/openssl/prov_ssl.h /usr/include/openssl/ssl2.h \
  /usr/include/openssl/ssl3.h /usr/include/openssl/tls1.h \
- /usr/include/openssl/dtls1.h /usr/include/openssl/srtp.h edge.h node.h \
- control.h device.h graph.h logger.h names.h netutl.h process.h \
- protocol.h route.h script.h utils.h xalloc.h quic/quic_transport.h \
- quic/quic.h ../deps/quiche/quiche/include/quiche.h quic/../splay_tree.h \
- quic/../vless/reality.h
+ /usr/include/openssl/dtls1.h /usr/include/openssl/srtp.h
 /usr/include/stdc-predef.h:
 system.h:
 ../config.h:
@@ -461,25 +457,13 @@ have.h:
 /usr/include/getopt.h:
 /usr/include/x86_64-linux-gnu/bits/getopt_ext.h:
 dropin.h:
-cipher.h:
-conf.h:
-list.h:
-splay_tree.h:
-subnet.h:
-net.h:
-ipv6.h:
-digest.h:
-event.h:
-connection.h:
-buffer.h:
-rsa.h:
-sptps.h:
-chacha-poly1305/chacha-poly1305.h:
-ecdh.h:
-ecdsa.h:
-vless/vless.h:
-system.h:
-vless/reality.h:
+quic/../logger.h:
+quic/../xalloc.h:
+quic/../crypto.h:
+quic/quic_reality.h:
+quic/quic.h:
+../deps/quiche/quiche/include/quiche.h:
+quic/../vless/reality.h:
 /usr/include/openssl/ssl.h:
 /usr/include/openssl/macros.h:
 /usr/include/x86_64-linux-gnu/openssl/opensslconf.h:
@@ -556,22 +540,3 @@ vless/reality.h:
 /usr/include/openssl/tls1.h:
 /usr/include/openssl/dtls1.h:
 /usr/include/openssl/srtp.h:
-edge.h:
-node.h:
-control.h:
-device.h:
-graph.h:
-logger.h:
-names.h:
-netutl.h:
-process.h:
-protocol.h:
-route.h:
-script.h:
-utils.h:
-xalloc.h:
-quic/quic_transport.h:
-quic/quic.h:
-../deps/quiche/quiche/include/quiche.h:
-quic/../splay_tree.h:
-quic/../vless/reality.h:

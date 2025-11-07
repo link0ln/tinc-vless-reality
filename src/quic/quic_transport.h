@@ -23,6 +23,7 @@
 #include "system.h"
 #include "quic.h"
 #include "../splay_tree.h"
+#include "../vless/reality.h"
 
 /* Forward declarations */
 struct node_t;
@@ -33,6 +34,7 @@ typedef struct quic_manager_t {
 	/* Configuration */
 	quic_config_t *client_config;
 	quic_config_t *server_config;
+	reality_config_t *reality_config;  /* Reality protocol configuration */
 
 	/* Connection mapping: node_t* -> quic_conn_t* */
 	splay_tree_t *connections;
@@ -51,6 +53,7 @@ typedef struct quic_manager_t {
 	/* State */
 	bool initialized;
 	bool enabled;
+	bool reality_enabled;
 } quic_manager_t;
 
 /* Global QUIC manager instance */

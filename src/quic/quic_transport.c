@@ -31,12 +31,23 @@
 #include "../node.h"
 #include "quic_transport.h"
 #include "quic.h"
+#include "quic_reality.h"
 
 /* Global QUIC manager */
 quic_manager_t *quic_manager = NULL;
 
 /* Transport mode */
 transport_mode_t transport_mode = TRANSPORT_UDP;
+
+/* External Reality configuration (from conf.h) */
+extern bool vless_reality_enabled;
+extern char *vless_reality_dest;
+extern int vless_reality_dest_port;
+extern char *vless_reality_server_name;
+extern char *vless_reality_public_key;
+extern char *vless_reality_private_key;
+extern char *vless_reality_short_id;
+extern char *vless_reality_fingerprint;
 
 /* Connection comparison function for splay tree */
 /* a and b are quic_conn_t pointers, compare their associated nodes */
@@ -123,6 +134,55 @@ bool quic_transport_init(int port) {
 	quic_manager->initialized = true;
 	quic_manager->enabled = true;
 
+	/* Initialize Reality configuration if enabled */
+	if(vless_reality_enabled) {
+		quic_manager->reality_config = reality_config_new(true);  /* Server mode */
+
+		if(quic_manager->reality_config) {
+			/* Copy configuration from global variables */
+			if(vless_reality_server_name) {
+				strncpy(quic_manager->reality_config->server_name, vless_reality_server_name,
+				        sizeof(quic_manager->reality_config->server_name) - 1);
+			}
+
+			if(vless_reality_dest) {
+				strncpy(quic_manager->reality_config->dest_domain, vless_reality_dest,
+				        sizeof(quic_manager->reality_config->dest_domain) - 1);
+			}
+
+			quic_manager->reality_config->dest_port = vless_reality_dest_port;
+
+			/* Copy public/private keys */
+			if(vless_reality_public_key) {
+				/* Convert hex string to bytes */
+				/* TODO: Implement hex_to_bytes conversion */
+			}
+
+			if(vless_reality_private_key) {
+				/* Convert hex string to bytes */
+				/* TODO: Implement hex_to_bytes conversion */
+			}
+
+			/* Copy Short ID */
+			if(vless_reality_short_id) {
+				/* Convert hex string to bytes */
+				/* TODO: Implement hex_to_bytes conversion */
+				/* For now, just mark that we have one short ID */
+				quic_manager->reality_config->num_short_ids = 1;
+			} else {
+				quic_manager->reality_config->num_short_ids = 0;
+			}
+
+			quic_manager->reality_enabled = true;
+			logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Reality protocol enabled");
+		} else {
+			logger(DEBUG_ALWAYS, LOG_WARNING, "Failed to create Reality configuration");
+		}
+	} else {
+		quic_manager->reality_enabled = false;
+		quic_manager->reality_config = NULL;
+	}
+
 	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC transport initialized on port %d", port);
 
 	return true;
@@ -152,6 +212,10 @@ void quic_transport_exit(void) {
 
 	if(quic_manager->server_config) {
 		quic_config_free(quic_manager->server_config);
+	}
+
+	if(quic_manager->reality_config) {
+		reality_config_free(quic_manager->reality_config);
 	}
 
 	free(quic_manager);

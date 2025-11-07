@@ -234,7 +234,8 @@ quic/quic_transport.o: quic/quic_transport.c /usr/include/stdc-predef.h \
  /usr/include/openssl/ssl3.h /usr/include/openssl/tls1.h \
  /usr/include/openssl/dtls1.h /usr/include/openssl/srtp.h quic/../edge.h \
  quic/../node.h quic/quic_transport.h quic/quic.h \
- ../deps/quiche/quiche/include/quiche.h
+ ../deps/quiche/quiche/include/quiche.h quic/../vless/reality.h \
+ quic/quic_reality.h
 /usr/include/stdc-predef.h:
 system.h:
 ../config.h:
@@ -568,3 +569,5 @@ quic/../node.h:
 quic/quic_transport.h:
 quic/quic.h:
 ../deps/quiche/quiche/include/quiche.h:
+quic/../vless/reality.h:
+quic/quic_reality.h:

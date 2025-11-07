@@ -233,7 +233,8 @@ net_packet.o: net_packet.c /usr/include/stdc-predef.h system.h \
  /usr/include/openssl/dtls1.h /usr/include/openssl/srtp.h edge.h crypto.h \
  device.h ethernet.h ipv4.h graph.h logger.h netutl.h protocol.h route.h \
  utils.h xalloc.h quic/quic_transport.h quic/quic.h \
- ../deps/quiche/quiche/include/quiche.h quic/../splay_tree.h
+ ../deps/quiche/quiche/include/quiche.h quic/../splay_tree.h \
+ quic/../vless/reality.h
 /usr/include/stdc-predef.h:
 system.h:
 ../config.h:
@@ -580,3 +581,4 @@ quic/quic_transport.h:
 quic/quic.h:
 ../deps/quiche/quiche/include/quiche.h:
 quic/../splay_tree.h:
+quic/../vless/reality.h:

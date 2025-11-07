@@ -48,7 +48,7 @@ vless_SOURCES = \
 quic_SOURCES = \
 	quic/quic.c quic/quic.h \
 	quic/quic_transport.c quic/quic_transport.h \
-	quic/quic_reality.h
+	quic/quic_reality.c quic/quic_reality.h
 
 tincd_SOURCES = \
 	address_cache.c address_cache.h \
