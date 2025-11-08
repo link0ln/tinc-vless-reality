@@ -52,19 +52,6 @@ typedef struct conn_id_entry_t {
 	quic_conn_t *conn;
 } conn_id_entry_t;
 
-/* Helper function to format CID as hex string for logging */
-static const char *format_conn_id(const uint8_t *cid, size_t cid_len) {
-	static char hex_buf[QUICHE_MAX_CONN_ID_LEN * 2 + 1];
-	if(!cid || cid_len == 0 || cid_len > QUICHE_MAX_CONN_ID_LEN) {
-		return "(invalid)";
-	}
-	for(size_t i = 0; i < cid_len; i++) {
-		sprintf(&hex_buf[i * 2], "%02x", cid[i]);
-	}
-	hex_buf[cid_len * 2] = '\0';
-	return hex_buf;
-}
-
 /* External Reality configuration (from conf.h) */
 extern bool vless_reality_enabled;
 extern char *vless_reality_dest;
@@ -114,6 +101,10 @@ static int connection_compare(const void *a, const void *b) {
 
 /* Connection ID comparison function for splay tree */
 static int conn_id_compare(const void *a, const void *b) {
+	/* Handle NULL pointers - splay tree may pass sentinel nodes */
+	if(!a) return b ? -1 : 0;
+	if(!b) return 1;
+
 	const conn_id_entry_t *ea = (const conn_id_entry_t *)a;
 	const conn_id_entry_t *eb = (const conn_id_entry_t *)b;
 
@@ -137,12 +128,10 @@ static bool register_connection_id(const uint8_t *conn_id, size_t conn_id_len, q
 	entry->conn_id_len = conn_id_len;
 	entry->conn = conn;
 
-	splay_node_t *node = splay_alloc_node();
-	node->data = entry;
-	splay_insert(quic_manager->conn_id_map, node);
+	/* Use splay_insert correctly - pass data, not node */
+	splay_insert(quic_manager->conn_id_map, entry);
 
-	logger(DEBUG_PROTOCOL, LOG_DEBUG, "CID_REG: Registered CID=%s (len=%zu) conn=%p",
-	       format_conn_id(conn_id, conn_id_len), conn_id_len, (void*)conn);
+	logger(DEBUG_PROTOCOL, LOG_DEBUG, "Registered connection ID (len=%zu) for demultiplexing", conn_id_len);
 	return true;
 }
 
@@ -153,14 +142,15 @@ static void unregister_connection_id(const uint8_t *conn_id, size_t conn_id_len)
 	}
 
 	conn_id_entry_t search;
+	memset(&search, 0, sizeof(search));  // Zero entire structure
 	memcpy(search.conn_id, conn_id, conn_id_len);
 	search.conn_id_len = conn_id_len;
 
-	splay_node_t *node = splay_search(quic_manager->conn_id_map, &search);
+	/* splay_unlink returns the node for the data */
+	splay_node_t *node = splay_unlink(quic_manager->conn_id_map, &search);
 	if(node) {
-		splay_delete(quic_manager->conn_id_map, node);
-		free(node->data);
-		splay_free_node(quic_manager->conn_id_map, node);
+		free(node->data);  /* Free the conn_id_entry_t */
+		free(node);        /* Free the node itself */
 		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unregistered connection ID (len=%zu) from demultiplexing", conn_id_len);
 	}
 }
@@ -172,19 +162,16 @@ static quic_conn_t *lookup_connection_by_id(const uint8_t *conn_id, size_t conn_
 	}
 
 	conn_id_entry_t search;
+	memset(&search, 0, sizeof(search));  // Zero entire structure to avoid padding issues
 	memcpy(search.conn_id, conn_id, conn_id_len);
 	search.conn_id_len = conn_id_len;
 
-	splay_node_t *node = splay_search(quic_manager->conn_id_map, &search);
-	if(node && node->data) {
-		conn_id_entry_t *entry = (conn_id_entry_t *)node->data;
-		logger(DEBUG_PROTOCOL, LOG_DEBUG, "CID_LOOKUP: Found CID=%s -> conn=%p",
-		       format_conn_id(conn_id, conn_id_len), (void*)entry->conn);
+	/* splay_search returns data pointer, not node */
+	conn_id_entry_t *entry = (conn_id_entry_t *)splay_search(quic_manager->conn_id_map, &search);
+	if(entry) {
 		return entry->conn;
 	}
 
-	logger(DEBUG_PROTOCOL, LOG_DEBUG, "CID_LOOKUP: NOT FOUND CID=%s (len=%zu)",
-	       format_conn_id(conn_id, conn_id_len), conn_id_len);
 	return NULL;
 }
 
@@ -480,9 +467,14 @@ quic_conn_t *quic_transport_create_connection(node_t *node, bool is_client) {
 	/* Add to connection tree */
 	splay_insert(quic_manager->connections, qconn);
 
-	/* Register connection ID for demultiplexing */
+	/* Register connection IDs for demultiplexing */
 	if(qconn->scid_len > 0) {
 		register_connection_id(qconn->scid, qconn->scid_len, qconn);
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Registered client SCID (len=%zu)", qconn->scid_len);
+	}
+	if(qconn->dcid_len > 0) {
+		register_connection_id(qconn->dcid, qconn->dcid_len, qconn);
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Registered client DCID (len=%zu)", qconn->dcid_len);
 	}
 
 	logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC %s connection to %s",
@@ -517,9 +509,12 @@ void quic_transport_remove_connection(node_t *node) {
 	quic_conn_t *qconn = (quic_conn_t *)sn->data;
 
 	if(qconn) {
-		/* Unregister connection ID before freeing */
+		/* Unregister all connection IDs before freeing */
 		if(qconn->scid_len > 0) {
 			unregister_connection_id(qconn->scid, qconn->scid_len);
+		}
+		if(qconn->dcid_len > 0) {
+			unregister_connection_id(qconn->dcid, qconn->dcid_len);
 		}
 		quic_conn_free(qconn);
 	}
@@ -778,9 +773,16 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	/* Add to connection tree */
 	splay_insert(quic_manager->connections, qconn);
 
-	/* Register connection ID for demultiplexing */
+	/* Register connection IDs for demultiplexing
+	 * Register both our SCID and client's DCID (our DCID) so we can find
+	 * the connection regardless of which CID is used in incoming packets */
 	if(qconn->scid_len > 0) {
 		register_connection_id(qconn->scid, qconn->scid_len, qconn);
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Registered our SCID (len=%zu)", qconn->scid_len);
+	}
+	if(qconn->dcid_len > 0) {
+		register_connection_id(qconn->dcid, qconn->dcid_len, qconn);
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Registered client's DCID (len=%zu)", qconn->dcid_len);
 	}
 
 	logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC server connection for new client");
