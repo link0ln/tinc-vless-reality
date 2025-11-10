@@ -1,9 +1,11 @@
 services:
   # Node 1 - VLESS Server with Reality (in both networks - acts as router)
   node1:
+    image: tinc-vless:latest  # Single shared image for all nodes
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.optimized
+      target: runtime  # Use the minimal runtime stage
     container_name: tinc-node1
     hostname: node1
     networks:
@@ -30,9 +32,7 @@ services:
 
   # Node 2 - VLESS Client connecting to Node1 (only in network_12)
   node2:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: tinc-vless:latest  # Reuse the same image
     container_name: tinc-node2
     hostname: node2
     networks:
@@ -59,9 +59,7 @@ services:
 
   # Node 3 - VLESS Client connecting to Node1 (only in network_13)
   node3:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: tinc-vless:latest  # Reuse the same image
     container_name: tinc-node3
     hostname: node3
     networks:

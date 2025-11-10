@@ -81,8 +81,9 @@ extern bool quic_transport_init(struct listen_socket_t *sockets, int num_sockets
 extern void quic_transport_exit(void);
 
 /* Connection management */
-extern quic_conn_t *quic_transport_get_connection(struct node_t *node);
-extern quic_conn_t *quic_transport_create_connection(struct node_t *node, bool is_client);
+extern quic_conn_t *quic_transport_get_connection(struct node_t *node, const sockaddr_t *sa);
+extern quic_conn_t *quic_find_connection_by_address(const sockaddr_t *addr);
+extern quic_conn_t *quic_transport_create_connection(struct node_t *node, bool is_client, const sockaddr_t *sa);
 extern void quic_transport_remove_connection(struct node_t *node);
 
 /* VPN packet operations */
@@ -96,5 +97,13 @@ extern void handle_incoming_quic_data(void *data, int flags);
 /* Utility functions */
 extern bool quic_transport_is_enabled(void);
 extern void quic_transport_set_mode(transport_mode_t mode);
+
+/* Meta-connection API (control plane over QUIC streams) */
+extern int64_t quic_meta_create_stream(quic_conn_t *qconn);
+extern ssize_t quic_meta_send(quic_conn_t *qconn, int64_t stream_id,
+                               const uint8_t *data, size_t len);
+extern ssize_t quic_meta_recv(quic_conn_t *qconn, int64_t stream_id,
+                               uint8_t *buf, size_t buf_len);
+extern bool quic_meta_stream_readable(quic_conn_t *qconn, int64_t stream_id);
 
 #endif /* TINC_QUIC_TRANSPORT_H */

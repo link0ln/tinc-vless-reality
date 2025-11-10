@@ -33,7 +33,6 @@
 #include "../connection.h"
 #include "../meta.h"
 #include "../net.h"
-#include "../protocol.h"
 #include "quic_transport.h"
 #include "quic.h"
 #include "quic_reality.h"
@@ -64,20 +63,6 @@ extern char *vless_reality_public_key;
 extern char *vless_reality_private_key;
 extern char *vless_reality_short_id;
 extern char *vless_reality_fingerprint;
-
-/* Форматирует Connection ID в hex строку для логирования */
-static char *format_cid(const uint8_t *cid, size_t len) {
-	static char buf[128];
-	if(len == 0 || len > 20) {
-		snprintf(buf, sizeof(buf), "<empty>");
-		return buf;
-	}
-	char *p = buf;
-	for(size_t i = 0; i < len && i < 20; i++) {
-		p += sprintf(p, "%02x", cid[i]);
-	}
-	return buf;
-}
 
 /* Connection comparison function for splay tree */
 /* a and b are quic_conn_t pointers, compare by peer address */
@@ -150,8 +135,7 @@ static bool register_connection_id(const uint8_t *conn_id, size_t conn_id_len, q
 	/* Use splay_insert correctly - pass data, not node */
 	splay_insert(quic_manager->conn_id_map, entry);
 
-	logger(DEBUG_PROTOCOL, LOG_DEBUG, "Registered CID=%s (len=%zu) for demultiplexing",
-	       format_cid(conn_id, conn_id_len), conn_id_len);
+	logger(DEBUG_PROTOCOL, LOG_DEBUG, "Registered connection ID (len=%zu) for demultiplexing", conn_id_len);
 	return true;
 }
 
@@ -177,22 +161,9 @@ static void unregister_connection_id(const uint8_t *conn_id, size_t conn_id_len)
 
 /* Lookup connection by ID */
 static quic_conn_t *lookup_connection_by_id(const uint8_t *conn_id, size_t conn_id_len) {
-	logger(DEBUG_PROTOCOL, LOG_DEBUG, "lookup_connection_by_id() called for CID=%s (len=%zu)",
-	       format_cid(conn_id, conn_id_len), conn_id_len);
-
 	if(!quic_manager || !quic_manager->conn_id_map || !conn_id || conn_id_len == 0) {
-		logger(DEBUG_PROTOCOL, LOG_DEBUG, "lookup_connection_by_id() - invalid parameters, returning NULL");
 		return NULL;
 	}
-
-	/* Count registered CIDs for debugging */
-	int cid_count = 0;
-	if(quic_manager->conn_id_map) {
-		for(splay_node_t *n = quic_manager->conn_id_map->head; n; n = n->next) {
-			cid_count++;
-		}
-	}
-	logger(DEBUG_PROTOCOL, LOG_DEBUG, "Total registered CIDs in map: %d", cid_count);
 
 	conn_id_entry_t search;
 	memset(&search, 0, sizeof(search));  // Zero entire structure to avoid padding issues
@@ -202,13 +173,9 @@ static quic_conn_t *lookup_connection_by_id(const uint8_t *conn_id, size_t conn_
 	/* splay_search returns data pointer, not node */
 	conn_id_entry_t *entry = (conn_id_entry_t *)splay_search(quic_manager->conn_id_map, &search);
 	if(entry) {
-		logger(DEBUG_PROTOCOL, LOG_DEBUG, "lookup_connection_by_id() - FOUND connection for CID=%s",
-		       format_cid(conn_id, conn_id_len));
 		return entry->conn;
 	}
 
-	logger(DEBUG_PROTOCOL, LOG_DEBUG, "lookup_connection_by_id() - NOT FOUND for CID=%s",
-	       format_cid(conn_id, conn_id_len));
 	return NULL;
 }
 
@@ -696,31 +663,11 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	                             dcid, &dcid_len,
 	                             token, &token_len);
 
-	/* Log parsed header information */
-	if(rc >= 0) {
-		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Parsed QUIC header: type=%u version=0x%x DCID=%s (len=%zu) SCID=%s (len=%zu)",
-		       type, version, format_cid(dcid, dcid_len), dcid_len,
-		       format_cid(scid, scid_len), scid_len);
-		/* TRACE: Log SCID value immediately after parsing */
-		logger(DEBUG_PROTOCOL, LOG_INFO, "TRACE after parse: scid=%s scid_len=%zu",
-		       format_cid(scid, scid_len), scid_len);
-	} else {
-		logger(DEBUG_PROTOCOL, LOG_WARNING, "Failed to parse QUIC header: rc=%d", rc);
-	}
-
 	quic_conn_t *qconn = NULL;
 
 	if(rc >= 0 && dcid_len > 0) {
 		/* Try to find existing connection by DCID (our SCID) */
 		qconn = lookup_connection_by_id(dcid, dcid_len);
-
-		if(qconn) {
-			logger(DEBUG_PROTOCOL, LOG_DEBUG, "CID lookup SUCCESS: Found connection for DCID=%s",
-			       format_cid(dcid, dcid_len));
-		} else {
-			logger(DEBUG_PROTOCOL, LOG_DEBUG, "CID lookup FAILED: No connection found for DCID=%s, trying address fallback",
-			       format_cid(dcid, dcid_len));
-		}
 	}
 
 	/* Fallback: if CID lookup failed, try peer address lookup
@@ -750,28 +697,6 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 		}
 	}
 
-	/* For client connections: register peer SCID from packet header BEFORE processing packet
-	 * This allows quiche to recognize the DCID in server responses during handshake */
-	if(qconn && qconn->is_client && scid_len > 0) {
-		/* TRACE: Log SCID value right before registration */
-		logger(DEBUG_PROTOCOL, LOG_INFO, "TRACE before register: qconn=%p is_client=%d scid=%s scid_len=%zu",
-		       qconn, qconn->is_client, format_cid(scid, scid_len), scid_len);
-
-		/* Check if this peer SCID is already registered */
-		quic_conn_t *existing = lookup_connection_by_id(scid, scid_len);
-		if(!existing) {
-			/* Register server's SCID for demultiplexing */
-			register_connection_id(scid, scid_len, qconn);
-			logger(DEBUG_PROTOCOL, LOG_INFO,
-			       "Client: registered peer SCID=%s (len=%zu) from packet header before quic_conn_recv()",
-			       format_cid(scid, scid_len), scid_len);
-		} else if(existing != qconn) {
-			logger(DEBUG_PROTOCOL, LOG_WARNING,
-			       "Client: peer SCID=%s from packet header already registered to different connection",
-			       format_cid(scid, scid_len));
-		}
-	}
-
 	if(qconn) {
 		/* Feed packet to connection */
 		ssize_t done = quic_conn_recv(qconn, buf, len);
@@ -781,8 +706,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 			quic_manager->bytes_received += done;
 
 			/* Check if we need to bind server connection to node */
-			bool is_established = quic_conn_is_established(qconn);
-			if(is_established && !qconn->node && qconn->peer_addr.ss_family != 0) {
+			if(quic_conn_is_established(qconn) && !qconn->node && qconn->peer_addr.ss_family != 0) {
 				/* Server-side connection needs node binding */
 				char *peer_hostname = sockaddr2hostname((sockaddr_t *)&qconn->peer_addr);
 				logger(DEBUG_PROTOCOL, LOG_DEBUG, "Server connection established from %s (family=%d), attempting to bind node",
@@ -865,51 +789,8 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 				}
 
 				if(!qconn->node) {
-					logger(DEBUG_PROTOCOL, LOG_INFO, "Could not find node for server connection from %s - will bind via ID message",
+					logger(DEBUG_PROTOCOL, LOG_WARNING, "Could not find node for server connection from %s",
 					       sockaddr2hostname(&qconn->peer_addr));
-
-					/* Hybrid binding approach: Create connection_t without node for incoming connection
-					 * Node will be bound when ID message is received in id_h() handler */
-					connection_t *c = new_connection();
-					c->name = xstrdup("unknown");  /* Will be updated when ID message arrives */
-					c->outcipher = myself->connection->outcipher;
-					c->outdigest = myself->connection->outdigest;
-					c->outmaclength = myself->connection->outmaclength;
-					c->outcompression = myself->connection->outcompression;
-
-					/* Convert sockaddr_storage to sockaddr_t */
-					memcpy(&c->address, &qconn->peer_addr, sizeof(struct sockaddr_storage));
-					c->hostname = sockaddr2hostname((sockaddr_t *)&qconn->peer_addr);
-					c->last_ping_time = now.tv_sec;
-					c->node = NULL;  /* Will be set when ID message arrives */
-					c->edge = NULL;
-
-					/* Mark as QUIC meta connection */
-					c->status.quic_meta = true;
-					c->status.sptps_disabled = true;
-
-					/* Create metadata stream for this unbound connection */
-					int64_t stream_id = quic_meta_create_stream(qconn);
-
-					if(stream_id >= 0) {
-						c->quic_stream_id = stream_id;
-						logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC meta stream %ld for unbound incoming connection from %s",
-						       (long)stream_id, c->hostname);
-
-						/* Add to connection list - will be linked to node when ID message arrives */
-						connection_add(c);
-
-						/* Initiate metadata protocol to receive ID message */
-						c->allow_request = ID;
-						send_id(c);
-
-						logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for unbound incoming QUIC from %s, waiting for ID message",
-						       c->hostname);
-					} else {
-						logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC meta stream for incoming connection from %s",
-						       c->hostname);
-						free_connection(c);
-					}
 				}
 			}
 
@@ -931,41 +812,18 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC handshake complete for %s, initiating metadata protocol",
 					       n->name);
 
-					/* Create or discover metadata stream NOW - after handshake, before finish_connecting()
+					/* Create metadata stream NOW - after handshake, before finish_connecting()
 					 * This ensures the stream is immediately usable for ID/ACK exchange */
 					if(c->quic_stream_id < 0) {
-						/* Client: discover stream created by server */
-						if(qconn->is_client) {
-							logger(DEBUG_PROTOCOL, LOG_INFO, "Attempting stream discovery for %s after handshake", n->name);
-							quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
-							if(readable) {
-								uint64_t stream_id;
-								if(quiche_stream_iter_next(readable, &stream_id)) {
-									c->quic_stream_id = stream_id;
-									logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld from %s after handshake",
-									       (long)stream_id, n->name);
-								} else {
-									logger(DEBUG_PROTOCOL, LOG_WARNING, "No readable streams yet for %s after handshake", n->name);
-									quiche_stream_iter_free(readable);
-									return;  /* Wait for next packet */
-								}
-								quiche_stream_iter_free(readable);
-							} else {
-								logger(DEBUG_PROTOCOL, LOG_WARNING, "quiche_conn_readable returned NULL for %s", n->name);
-								return;  /* Wait for next packet */
-							}
+						int64_t stream_id = quic_meta_create_stream(qconn);
+						if(stream_id >= 0) {
+							c->quic_stream_id = stream_id;
+							logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC meta stream %ld for %s after handshake",
+							       (long)stream_id, n->name);
 						} else {
-							/* Server: create stream (should not happen here, streams are created for unbound connections) */
-							int64_t stream_id = quic_meta_create_stream(qconn);
-							if(stream_id >= 0) {
-								c->quic_stream_id = stream_id;
-								logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC meta stream %ld for %s after handshake",
-								       (long)stream_id, n->name);
-							} else {
-								logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC meta stream for %s after handshake",
-								       n->name);
-								return;  /* Do not call finish_connecting if stream creation fails */
-							}
+							logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC meta stream for %s after handshake",
+							       n->name);
+							return;  /* Don't call finish_connecting() if stream creation fails */
 						}
 					}
 
@@ -1080,58 +938,6 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	if(rc < 0) {
 		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Failed to parse QUIC header for new connection: %d", rc);
 		return;
-	}
-
-	/* Before creating new server connection, check if this is a response to existing client connection */
-	/* Extract peer SCID from packet header and try to find client connection by address */
-	if(scid_len > 0 && from) {
-		/* Look for client connections that might be waiting for this response */
-		for(splay_node_t *node_iter = quic_manager->connections->head; node_iter; node_iter = node_iter->next) {
-			quic_conn_t *candidate = (quic_conn_t *)node_iter->data;
-			if(candidate && candidate->is_client && candidate->peer_addr.ss_family == from->sa_family) {
-				bool match = false;
-				/* Check if peer address matches (IP only, port may differ) */
-				if(from->sa_family == AF_INET) {
-					struct sockaddr_in *addr1 = (struct sockaddr_in *)&candidate->peer_addr;
-					struct sockaddr_in *addr2 = (struct sockaddr_in *)from;
-					match = (memcmp(&addr1->sin_addr, &addr2->sin_addr, sizeof(addr1->sin_addr)) == 0);
-				} else if(from->sa_family == AF_INET6) {
-					struct sockaddr_in6 *addr1 = (struct sockaddr_in6 *)&candidate->peer_addr;
-					struct sockaddr_in6 *addr2 = (struct sockaddr_in6 *)from;
-					match = (memcmp(&addr1->sin6_addr, &addr2->sin6_addr, sizeof(addr1->sin6_addr)) == 0);
-				}
-
-				if(match) {
-					/* Found client connection - register peer SCID and route packet */
-					logger(DEBUG_PROTOCOL, LOG_INFO,
-					       "Found existing client connection - registering peer SCID=%s from packet header",
-					       format_cid(scid, scid_len));
-
-					/* Register peer SCID for demultiplexing */
-					register_connection_id(scid, scid_len, candidate);
-
-					/* Now route the packet to this connection */
-					ssize_t done = quic_conn_recv(candidate, buf, len);
-					if(done > 0) {
-						quic_manager->packets_received++;
-						quic_manager->bytes_received += done;
-						logger(DEBUG_PROTOCOL, LOG_INFO,
-						       "Successfully routed packet to existing client connection after peer SCID registration");
-						
-						/* Continue with normal packet processing */
-						if(quic_conn_is_established(candidate) && candidate->send_buf_count > 0 && candidate->node) {
-							quic_conn_flush_buffered_packets(candidate);
-						}
-						quic_conn_send(candidate);
-					} else {
-						logger(DEBUG_PROTOCOL, LOG_WARNING,
-						       "Failed to process packet on client connection after peer SCID registration: done=%zd",
-						       done);
-					}
-					return;  /* Packet processed, do not create new server connection */
-				}
-			}
-		}
 	}
 
 	logger(DEBUG_PROTOCOL, LOG_INFO, "Received QUIC packet from unknown source: type=%u version=0x%x", type, version);

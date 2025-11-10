@@ -37,6 +37,7 @@
 #include "xalloc.h"
 #include "vless/vless.h"
 #include "vless/reality.h"
+#include "quic/quic_transport.h"
 
 int addressfamily = AF_UNSPEC;
 int maxtimeout = 900;
@@ -545,7 +546,8 @@ void finish_connecting(connection_t *c) {
 	c->status.connecting = false;
 
 	/* Check if VLESS mode is enabled (use global configuration) */
-	if(vless_mode) {
+	/* Skip VLESS for QUIC connections - QUIC already provides TLS 1.3 encryption */
+	if(vless_mode && !c->status.quic_meta) {
 		logger(DEBUG_PROTOCOL, LOG_INFO, "VLESS mode enabled, performing client handshake");
 
 		/* Initialize VLESS client context */
@@ -563,6 +565,8 @@ void finish_connecting(connection_t *c) {
 		}
 
 		logger(DEBUG_PROTOCOL, LOG_INFO, "VLESS connection established with %s", c->hostname);
+	} else if(c->status.quic_meta) {
+		logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC connection, skipping VLESS (already encrypted with TLS 1.3)");
 	}
 
 	send_id(c);
@@ -628,7 +632,48 @@ static void handle_meta_write(connection_t *c) {
 		return;
 	}
 
-	ssize_t outlen = send(c->socket, c->outbuf.data + c->outbuf.offset, c->outbuf.len - c->outbuf.offset, 0);
+	ssize_t outlen;
+
+	/* Use QUIC stream write if QUIC meta-connection is active */
+	if(c->quic_stream_id >= 0 && c->status.quic_meta) {
+		if(!c->node) {
+			/* Node not created yet (before ACK), keep data buffered */
+			logger(DEBUG_META, LOG_DEBUG, "QUIC meta-connection: node not yet created, keeping data buffered");
+			return;
+		}
+
+		/* Get QUIC connection for this node */
+		quic_conn_t *qconn = quic_transport_get_connection(c->node, NULL);
+
+		if(!qconn) {
+			logger(DEBUG_META, LOG_ERR, "No QUIC connection for node %s", c->node->name);
+			terminate_connection(c, c->edge);
+			return;
+		}
+
+		/* Try to send buffered data via QUIC stream */
+		logger(DEBUG_META, LOG_DEBUG, "QUIC mode: flushing %d bytes from outbuf via stream %ld",
+		       c->outbuf.len - c->outbuf.offset, (long)c->quic_stream_id);
+
+		outlen = quic_meta_send(qconn, c->quic_stream_id,
+		                        (const uint8_t *)(c->outbuf.data + c->outbuf.offset),
+		                        c->outbuf.len - c->outbuf.offset);
+
+		if(outlen < 0) {
+			/* Handshake not complete or stream would block - keep data buffered */
+			logger(DEBUG_META, LOG_DEBUG, "QUIC stream send would block, keeping data buffered");
+			return;
+		}
+	} else if(c->status.vless_enabled && c->vless && c->status.vless_handshake_done) {
+		/* Use VLESS write if VLESS is enabled and handshake is complete */
+		logger(DEBUG_META, LOG_DEBUG, "VLESS mode: writing %d bytes through vless_write()",
+		       c->outbuf.len - c->outbuf.offset);
+		outlen = vless_write(c->vless, c->socket, c->outbuf.data + c->outbuf.offset,
+		                     c->outbuf.len - c->outbuf.offset);
+	} else {
+		/* Regular TCP send */
+		outlen = send(c->socket, c->outbuf.data + c->outbuf.offset, c->outbuf.len - c->outbuf.offset, 0);
+	}
 
 	if(outlen <= 0) {
 		if(!sockerrno || sockerrno == EPIPE) {
@@ -722,6 +767,54 @@ begin:
 
 	logger(DEBUG_CONNECTIONS, LOG_INFO, "Trying to connect to %s (%s)", outgoing->node->name, c->hostname);
 
+	/* QUIC mode: create QUIC connection and meta stream instead of TCP socket */
+	if(transport_mode == TRANSPORT_QUIC) {
+		/* Check if QUIC connection already exists in splay tree using the target address */
+		quic_conn_t *qconn = quic_transport_get_connection(outgoing->node, sa);
+
+		if(qconn) {
+			/* QUIC connection already exists, reuse it */
+			logger(DEBUG_CONNECTIONS, LOG_DEBUG, "QUIC connection to %s already exists, reusing", outgoing->node->name);
+			free_connection(c);
+			return true;
+		}
+
+		logger(DEBUG_CONNECTIONS, LOG_INFO, "Using QUIC transport for connection to %s", outgoing->node->name);
+
+		/* Create new QUIC connection */
+		qconn = quic_transport_create_connection(outgoing->node, true, sa);
+
+		if(!qconn) {
+			logger(DEBUG_CONNECTIONS, LOG_ERR, "Failed to create QUIC connection to %s", outgoing->node->name);
+			free_connection(c);
+			goto begin;
+		}
+
+		/* Do NOT create metadata stream here - it must be created AFTER handshake completes
+		 * Stream creation moved to quic_transport_handle_packet() when quic_conn_is_established() returns true
+		 * This ensures the stream is immediately usable for sending/receiving metadata */
+
+		/* Mark this connection as QUIC-enabled */
+		c->status.quic_meta = 1;
+		c->quic_stream_id = -1;  /* Will be created after handshake completes */
+		c->status.sptps_disabled = 1;
+		c->node = outgoing->node;
+
+		/* Create a dummy socket for event loop compatibility (will use QUIC stream instead) */
+		c->socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+		if(c->socket == -1) {
+			logger(DEBUG_CONNECTIONS, LOG_ERR, "Creating dummy socket failed: %s", sockstrerror(sockerrno));
+			free_connection(c);
+			goto begin;
+		}
+
+		logger(DEBUG_CONNECTIONS, LOG_INFO, "QUIC connection to %s created, waiting for handshake", outgoing->node->name);
+
+		/* Skip TCP connection setup */
+		goto quic_connection_ready;
+	}
+
 	if(!proxytype) {
 		c->socket = socket(c->address.sa.sa_family, SOCK_STREAM, IPPROTO_TCP);
 		configure_tcp(c);
@@ -786,10 +879,15 @@ begin:
 		goto begin;
 	}
 
+quic_connection_ready:
 	/* Now that there is a working socket, fill in the rest and register this connection. */
 
 	c->last_ping_time = time(NULL);
-	c->status.connecting = true;
+
+	/* For QUIC, connection is already established (handshake happens separately) */
+	if(transport_mode != TRANSPORT_QUIC) {
+		c->status.connecting = true;
+	}
 	c->name = xstrdup(outgoing->node->name);
 #ifndef DISABLE_LEGACY
 	c->outcipher = myself->connection->outcipher;

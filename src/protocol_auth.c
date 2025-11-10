@@ -44,6 +44,7 @@
 #include "sptps.h"
 #include "utils.h"
 #include "xalloc.h"
+#include "quic/quic_transport.h"
 
 #include "ed25519/sha512.h"
 
@@ -415,6 +416,45 @@ bool id_h(connection_t *c, const char *request) {
 		c->name = xstrdup(name);
 	}
 
+	/* For incoming connections in QUIC mode, mark as QUIC-capable immediately
+	 * This allows send_id() to use buffering path instead of raw metadata
+	 * Stream discovery may have already happened in quic_transport.c before this function was called */
+	if(!c->outgoing && transport_mode == TRANSPORT_QUIC) {
+		c->status.quic_meta = 1;
+		c->status.sptps_disabled = 1;
+		/* Don't overwrite quic_stream_id if already discovered */
+		if(c->quic_stream_id < 0) {
+			c->quic_stream_id = -1;  /* Will be discovered when first data arrives */
+			logger(DEBUG_PROTOCOL, LOG_INFO, "Incoming connection from %s marked for QUIC mode (stream not yet discovered)",
+			       c->name);
+		} else {
+			logger(DEBUG_PROTOCOL, LOG_INFO, "Incoming connection from %s marked for QUIC mode (stream %ld already discovered)",
+			       c->name, (long)c->quic_stream_id);
+		}
+
+		/* Hybrid node binding: bind incoming QUIC connection to node via peer address lookup
+		 * This completes the hybrid approach:
+		 * - Outgoing: pre-bound in quic_transport_create_connection()
+		 * - Incoming: bound here when ID message is received */
+		node_t *node = lookup_node(c->name);
+		if(node) {
+			/* Use address-only lookup for incoming connections */
+			quic_conn_t *qconn = quic_find_connection_by_address(&c->address);
+			if(qconn && !qconn->node) {
+				qconn->node = node;
+				logger(DEBUG_PROTOCOL, LOG_INFO, "Bound incoming QUIC connection from %s (%s) to node via ID message",
+				       c->name, c->hostname);
+			} else if(qconn && qconn->node) {
+				logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC connection from %s already bound to node", c->name);
+			} else {
+				logger(DEBUG_PROTOCOL, LOG_WARNING, "No QUIC connection found for incoming connection from %s (%s)",
+				       c->name, c->hostname);
+			}
+		} else {
+			logger(DEBUG_PROTOCOL, LOG_WARNING, "Node lookup failed for %s", c->name);
+		}
+	}
+
 	/* Check if version matches */
 
 	if(c->protocol_major != myself->connection->protocol_major) {
@@ -472,6 +512,16 @@ bool id_h(connection_t *c, const char *request) {
 
 	if(!c->outgoing) {
 		send_id(c);
+	}
+
+	/* Disable SPTPS when VLESS is active to avoid double encryption */
+	if(c->status.vless_enabled && c->vless && disable_sptps_with_vless) {
+		c->status.sptps_disabled = 1;
+		c->allow_request = ACK;
+		logger(DEBUG_PROTOCOL, LOG_INFO, "SPTPS disabled for VLESS connection to %s (%s)",
+		       c->name, c->hostname);
+		/* Send ACK to complete authentication handshake */
+		return send_ack(c);
 	}
 
 	if(c->protocol_minor >= 2) {
@@ -995,6 +1045,75 @@ bool ack_h(connection_t *c, const char *request) {
 
 	n->connection = c;
 	c->node = n;
+
+	/* QUIC meta-connection setup (if enabled) */
+	if(!c->status.vless_enabled && (transport_mode == TRANSPORT_QUIC || transport_mode == TRANSPORT_HYBRID)) {
+		/* Only create QUIC connections for outgoing (client-side) connections */
+		/* Incoming connections will use the QUIC connection created by the peer */
+		if(c->outgoing) {
+			logger(DEBUG_PROTOCOL, LOG_INFO, "Setting up QUIC meta-connection for %s", c->name);
+
+			/* Ensure node has address information from the connection */
+			if(!n->address.sa.sa_family && c->address.sa.sa_family) {
+				memcpy(&n->address, &c->address, sizeof(n->address));
+				logger(DEBUG_PROTOCOL, LOG_DEBUG, "Copied connection address to node %s", n->name);
+			}
+
+			/* Create or get QUIC connection for this node */
+			quic_conn_t *qconn = quic_transport_get_connection(n, NULL);
+			if(!qconn) {
+				/* Create new QUIC connection (client-side only) */
+				qconn = quic_transport_create_connection(n, true, &c->address);
+				if(!qconn) {
+					logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC connection for %s", c->name);
+					if(transport_mode == TRANSPORT_QUIC) {
+						/* QUIC-only mode: fail the connection */
+						return false;
+					}
+					/* HYBRID mode: fall back to TCP */
+					logger(DEBUG_PROTOCOL, LOG_WARNING, "Falling back to TCP for %s", c->name);
+				}
+			}
+
+		if(qconn) {
+			/* Create bidirectional meta stream */
+			int64_t stream_id = quic_meta_create_stream(qconn);
+			if(stream_id >= 0) {
+				c->quic_stream_id = stream_id;
+				c->status.quic_meta = 1;
+				c->status.sptps_disabled = 1;  /* Disable SPTPS - QUIC provides encryption */
+				logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC meta stream %ld created for %s",
+				       (long)stream_id, c->name);
+			} else {
+				logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC meta stream for %s", c->name);
+				if(transport_mode == TRANSPORT_QUIC) {
+					return false;
+				}
+			}
+		}
+		} else {
+			/* Incoming connection: discover the QUIC stream from the existing QUIC connection */
+			/* Ensure node has address information from the connection */
+			if(!n->address.sa.sa_family && c->address.sa.sa_family) {
+				memcpy(&n->address, &c->address, sizeof(n->address));
+				logger(DEBUG_PROTOCOL, LOG_DEBUG, "Copied connection address to node %s for incoming connection", n->name);
+			}
+
+			/* Get the QUIC connection for this node (created by the peer's outgoing connection) */
+			quic_conn_t *qconn = quic_transport_get_connection(n, NULL);
+			if(qconn) {
+				/* The peer (client) has already created a stream
+				 * We'll discover it when data arrives - for now just mark this connection as QUIC-capable */
+				c->quic_stream_id = -1;  /* Will be set when first stream data arrives */
+				c->status.quic_meta = 1;
+				c->status.sptps_disabled = 1;
+				logger(DEBUG_PROTOCOL, LOG_INFO, "Incoming connection from %s will use existing QUIC connection (stream discovery deferred)",
+				       c->name);
+			} else {
+				logger(DEBUG_PROTOCOL, LOG_DEBUG, "No existing QUIC connection found for incoming connection from %s, using TCP", c->name);
+			}
+		}  /* end if(c->outgoing) */
+	}
 
 	if(!(c->options & options & OPTION_PMTU_DISCOVERY)) {
 		c->options &= ~OPTION_PMTU_DISCOVERY;

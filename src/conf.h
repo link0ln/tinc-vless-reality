@@ -53,6 +53,9 @@ extern char *vless_reality_private_key;
 extern char *vless_reality_short_id;
 extern char *vless_reality_fingerprint;
 
+extern int quic_fallback_mode;          /* 0=no, 1=yes, 2=auto */
+extern bool disable_sptps_with_vless;   /* Disable SPTPS when VLESS active */
+
 extern void init_configuration(splay_tree_t **config_tree);
 extern void exit_configuration(splay_tree_t **config_tree);
 extern config_t *new_config(void) __attribute__((__malloc__));

@@ -53,6 +53,12 @@ char *vless_reality_private_key = NULL;
 char *vless_reality_short_id = NULL;
 char *vless_reality_fingerprint = NULL;
 
+/* QUIC fallback configuration */
+int quic_fallback_mode = 2;  /* 0=no, 1=yes, 2=auto (default) */
+
+/* Disable SPTPS when VLESS is active (avoid double encryption) */
+bool disable_sptps_with_vless = true;
+
 static int config_compare(const config_t *a, const config_t *b) {
 	int result;
 

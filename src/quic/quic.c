@@ -28,6 +28,7 @@
 #include "quic.h"
 #include "logger.h"
 #include "xalloc.h"
+#include "../crypto.h"
 #include "utils.h"
 
 /* Default QUIC parameters (Chrome-like) */
@@ -225,12 +226,7 @@ quic_conn_t *quic_conn_new_client(quiche_config *config, const char *server_name
 
 	/* Generate random source connection ID */
 	qconn->scid_len = 16;
-
-	if(!randomize(qconn->scid, qconn->scid_len)) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to generate random SCID");
-		free(qconn);
-		return NULL;
-	}
+	randomize(qconn->scid, qconn->scid_len);
 
 	/* Store peer address */
 	memcpy(&qconn->peer_addr, addr, addr_len);
@@ -278,12 +274,7 @@ quic_conn_t *quic_conn_new_server(quiche_config *config, const uint8_t *dcid, si
 
 	/* Generate random source connection ID */
 	qconn->scid_len = 16;
-
-	if(!randomize(qconn->scid, qconn->scid_len)) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to generate random SCID");
-		free(qconn);
-		return NULL;
-	}
+	randomize(qconn->scid, qconn->scid_len);
 
 	/* Store peer address */
 	memcpy(&qconn->peer_addr, addr, addr_len);

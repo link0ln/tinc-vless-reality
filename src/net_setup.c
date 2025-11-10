@@ -1244,6 +1244,24 @@ bool setup_network(void) {
 		maxoutbufsize = 10 * MTU;
 	}
 
+	/* QUIC Fallback Configuration */
+	char *fallback_str = NULL;
+	if(get_config_string(lookup_config(config_tree, "QUICFallbackToTCP"), &fallback_str)) {
+		if(!strcasecmp(fallback_str, "no")) {
+			quic_fallback_mode = 0;
+		} else if(!strcasecmp(fallback_str, "yes")) {
+			quic_fallback_mode = 1;
+		} else if(!strcasecmp(fallback_str, "auto")) {
+			quic_fallback_mode = 2;
+		} else {
+			logger(DEBUG_ALWAYS, LOG_ERR, "Invalid QUICFallbackToTCP value: %s (use no/yes/auto)", fallback_str);
+			free(fallback_str);
+			return false;
+		}
+		free(fallback_str);
+		logger(DEBUG_ALWAYS, LOG_INFO, "QUIC fallback mode: %s", quic_fallback_mode == 0 ? "no" : (quic_fallback_mode == 1 ? "yes" : "auto"));
+	}
+
 	/* VLESS Protocol Configuration */
 	get_config_bool(lookup_config(config_tree, "VLESSMode"), &vless_mode);
 
@@ -1327,6 +1345,20 @@ bool setup_network(void) {
 	if((mode == TRANSPORT_QUIC || mode == TRANSPORT_HYBRID) && (myself->options & OPTION_TCPONLY)) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "QUIC transport mode requires UDP, but TCPonly is enabled. Disable TCPonly to use QUIC.");
 		return false;
+	}
+
+	/* Validate VLESS configuration */
+	if(vless_mode) {
+		/* VLESS requires either TCPonly or QUIC transport */
+		if(!(myself->options & OPTION_TCPONLY) && mode != TRANSPORT_QUIC && mode != TRANSPORT_HYBRID) {
+			logger(DEBUG_ALWAYS, LOG_ERR, "VLESSMode requires either TCPOnly=yes or TransportMode=quic/hybrid");
+			return false;
+		}
+
+		/* Automatically disable SPTPS when VLESS is enabled to avoid double encryption */
+		if(disable_sptps_with_vless) {
+			logger(DEBUG_ALWAYS, LOG_INFO, "Disabling SPTPS (using VLESS encryption instead)");
+		}
 	}
 
 	if(mode == TRANSPORT_QUIC || mode == TRANSPORT_HYBRID) {
