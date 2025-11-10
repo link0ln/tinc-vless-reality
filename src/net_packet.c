@@ -1847,31 +1847,33 @@ void handle_incoming_vpn_data(void *data, int flags) {
 	}
 
 #else
-	vpn_packet_t pkt;
-	sockaddr_t addr = {0};
-	socklen_t addrlen = sizeof(addr);
+    /* Non-recvmmsg path: drain socket until EWOULDBLOCK to not starve QUIC handshake */
+    while(true) {
+        vpn_packet_t pkt;
+        sockaddr_t addr = {0};
+        socklen_t addrlen = sizeof(addr);
 
-	pkt.offset = 0;
-	int len = recvfrom(ls->udp.fd, (void *)DATA(&pkt), MAXSIZE, 0, &addr.sa, &addrlen);
+        pkt.offset = 0;
+        int len = recvfrom(ls->udp.fd, (void *)DATA(&pkt), MAXSIZE, 0, &addr.sa, &addrlen);
 
-	if(len <= 0 || (size_t)len > MAXSIZE) {
-		if(!sockwouldblock(sockerrno)) {
-			logger(DEBUG_ALWAYS, LOG_ERR, "Receiving packet failed: %s", sockstrerror(sockerrno));
-		}
+        if(len <= 0 || (size_t)len > MAXSIZE) {
+            if(!sockwouldblock(sockerrno)) {
+                logger(DEBUG_ALWAYS, LOG_ERR, "Receiving packet failed: %s", sockstrerror(sockerrno));
+            }
+            break;
+        }
 
-		return;
-	}
+        pkt.len = len;
 
-	pkt.len = len;
-
-	/* Packet demultiplexing: check if this is a QUIC packet */
-	if(quic_transport_is_enabled() && is_quic_packet(DATA(&pkt), pkt.len)) {
-		/* Route to QUIC transport handler */
-		quic_transport_handle_packet(DATA(&pkt), pkt.len, &addr.sa, addrlen);
-	} else {
-		/* Route to native tinc packet handler */
-		handle_incoming_vpn_packet(ls, &pkt, &addr);
-	}
+        /* Packet demultiplexing: check if this is a QUIC packet */
+        if(quic_transport_is_enabled() && is_quic_packet(DATA(&pkt), pkt.len)) {
+            /* Route to QUIC transport handler */
+            quic_transport_handle_packet(DATA(&pkt), pkt.len, &addr.sa, addrlen);
+        } else {
+            /* Route to native tinc packet handler */
+            handle_incoming_vpn_packet(ls, &pkt, &addr);
+        }
+    }
 #endif
 }
 

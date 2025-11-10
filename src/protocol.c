@@ -128,18 +128,20 @@ bool receive_request(connection_t *c, const char *request) {
 		}
 	}
 
-	int reqno = atoi(request);
+    int reqno = atoi(request);
+    logger(DEBUG_META, LOG_DEBUG, "receive_request: conn=%p quic_meta=%d allow=%d raw='%s'",
+           (void*)c, c ? c->status.quic_meta : -1, c ? c->allow_request : -1, request);
 
 	if(reqno || *request == '0') {
 		if((reqno < 0) || (reqno >= LAST) || !request_handlers[reqno]) {
 			logger(DEBUG_META, LOG_DEBUG, "Unknown request from %s (%s): %s", c->name, c->hostname, request);
 			return false;
 		} else {
-			logger(DEBUG_META, LOG_DEBUG, "Got %s from %s (%s): %s", request_name[reqno], c->name, c->hostname, request);
+            logger(DEBUG_META, LOG_DEBUG, "Got %s from %s (%s): %s", request_name[reqno], c->name, c->hostname, request);
 		}
 
 		if((c->allow_request != ALL) && (c->allow_request != reqno)) {
-			logger(DEBUG_ALWAYS, LOG_ERR, "Unauthorized request from %s (%s)", c->name, c->hostname);
+            logger(DEBUG_ALWAYS, LOG_ERR, "Unauthorized request from %s (%s)", c->name, c->hostname);
 			return false;
 		}
 

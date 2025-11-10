@@ -252,14 +252,14 @@ bool receive_meta(connection_t *c) {
 		goto process_metadata;
 	}
 
-	/* Use VLESS read if VLESS is enabled and handshake is complete */
-	if(c->status.vless_enabled && c->vless && c->status.vless_handshake_done) {
-		logger(DEBUG_META, LOG_DEBUG, "VLESS mode: reading through vless_read()");
-		inlen = vless_read(c->vless, c->socket, inbuf, sizeof(inbuf) - c->inbuf.len);
-	} else {
-		/* Regular TCP recv */
-		inlen = recv(c->socket, inbuf, sizeof(inbuf) - c->inbuf.len, 0);
-	}
+    /* Use VLESS read if VLESS is enabled and handshake is complete */
+    if(c->status.vless_enabled && c->vless && c->status.vless_handshake_done) {
+        logger(DEBUG_META, LOG_DEBUG, "VLESS mode: reading through vless_read()");
+        inlen = vless_read(c->vless, c->socket, inbuf, sizeof(inbuf) - c->inbuf.len);
+    } else {
+        /* Regular TCP recv (or QUIC stream handled above) */
+        inlen = recv(c->socket, inbuf, sizeof(inbuf) - c->inbuf.len, 0);
+    }
 
 	if(inlen <= 0) {
 		if(!inlen || !sockerrno) {
@@ -299,8 +299,8 @@ process_metadata:
 			continue;
 		}
 
-		if(!c->status.sptps_disabled && c->protocol_minor >= 2) {
-			size_t len = sptps_receive_data(&c->sptps, bufp, inlen);
+        if(!c->status.sptps_disabled && c->protocol_minor >= 2) {
+            size_t len = sptps_receive_data(&c->sptps, bufp, inlen);
 
 			if(!len) {
 				return false;
@@ -311,8 +311,8 @@ process_metadata:
 			continue;
 		}
 
-		if(!c->status.decryptin) {
-			endp = memchr(bufp, '\n', inlen);
+        if(!c->status.decryptin) {
+            endp = memchr(bufp, '\n', inlen);
 
 			if(endp) {
 				endp++;
@@ -320,7 +320,7 @@ process_metadata:
 				endp = bufp + inlen;
 			}
 
-			buffer_add(&c->inbuf, bufp, endp - bufp);
+            buffer_add(&c->inbuf, bufp, endp - bufp);
 
 			inlen -= endp - bufp;
 			bufp = endp;
@@ -406,21 +406,21 @@ process_metadata:
 
 			/* Otherwise we are waiting for a request */
 
-			char *request = buffer_readline(&c->inbuf);
-
-			if(request) {
-				bool result = receive_request(c, request);
+            char *request = buffer_readline(&c->inbuf);
+            
+            if(request) {
+                bool result = receive_request(c, request);
 
 				if(!result) {
 					return false;
 				}
 
-				continue;
-			} else {
-				break;
-			}
-		}
-	} while(inlen);
+                continue;
+            } else {
+                break;
+            }
+        }
+    } while(inlen);
 
 	return true;
 }

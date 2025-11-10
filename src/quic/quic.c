@@ -31,6 +31,9 @@
 #include "../crypto.h"
 #include "utils.h"
 
+/* Forward declaration for quiche debug callback */
+static void quic_dbg_cb(const char *line, void *arg);
+
 /* Default QUIC parameters (Chrome-like) */
 #define DEFAULT_MAX_DATA 10485760ULL
 #define DEFAULT_MAX_STREAM_DATA_BIDI 6291456ULL
@@ -46,13 +49,36 @@ static const size_t DEFAULT_ALPN_LEN = sizeof(DEFAULT_ALPN) - 1;
 /* Global state */
 static bool quic_initialized = false;
 
+/* Return stable hex string for quiche connection trace id */
+static const char *quic_trace_id(const quiche_conn *conn) {
+    static char buf[96];
+    const uint8_t *id = NULL;
+    size_t len = 0;
+    quiche_conn_trace_id(conn, &id, &len);
+    if(!id || len == 0) {
+        snprintf(buf, sizeof(buf), "-");
+        return buf;
+    }
+    size_t maxbytes = (sizeof(buf) - 1) / 2;
+    size_t n = len < maxbytes ? len : maxbytes;
+    char *p = buf;
+    for(size_t i = 0; i < n; i++) {
+        p += sprintf(p, "%02x", id[i]);
+    }
+    *p = '\0';
+    return buf;
+}
+
 /* Initialize QUIC subsystem */
 bool quic_init(void) {
-	if(quic_initialized) {
-		return true;
-	}
+    if(quic_initialized) {
+        return true;
+    }
 
-	logger(DEBUG_ALWAYS, LOG_INFO, "Initializing QUIC subsystem (quiche %s)", quiche_version());
+    logger(DEBUG_ALWAYS, LOG_INFO, "Initializing QUIC subsystem (quiche %s)", quiche_version());
+
+    /* Enable quiche debug logs */
+    quiche_enable_debug_logging(quic_dbg_cb, NULL);
 
 	quic_initialized = true;
 	return true;
@@ -72,8 +98,8 @@ void quic_exit(void) {
 quic_config_t *quic_config_new(bool is_server) {
 	quic_config_t *qconf = xzalloc(sizeof(quic_config_t));
 
-	/* Create quiche config */
-	qconf->config = quiche_config_new(QUICHE_PROTOCOL_VERSION);
+    /* Create quiche config */
+    qconf->config = quiche_config_new(QUICHE_PROTOCOL_VERSION);
 
 	if(!qconf->config) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to create quiche config");
@@ -81,7 +107,11 @@ quic_config_t *quic_config_new(bool is_server) {
 		return NULL;
 	}
 
-	/* Set default parameters */
+    /* Do not verify peer certificate by default (self-signed in demos).
+     * NOTE: For production, enable verification with a proper PKI. */
+    quiche_config_verify_peer(qconf->config, false);
+
+    /* Set default parameters */
 	qconf->max_data = DEFAULT_MAX_DATA;
 	qconf->max_stream_data_bidi_local = DEFAULT_MAX_STREAM_DATA_BIDI;
 	qconf->max_stream_data_bidi_remote = DEFAULT_MAX_STREAM_DATA_BIDI;
@@ -109,11 +139,13 @@ quic_config_t *quic_config_new(bool is_server) {
 	/* Disable connection migration for now (TODO: support it later) */
 	quiche_config_set_disable_active_migration(qconf->config, true);
 
-	/* Set default ALPN (HTTP/3) */
-	quiche_config_set_application_protos(qconf->config, DEFAULT_ALPN, DEFAULT_ALPN_LEN);
-	qconf->alpn = xmalloc(DEFAULT_ALPN_LEN);
-	memcpy(qconf->alpn, DEFAULT_ALPN, DEFAULT_ALPN_LEN);
-	qconf->alpn_len = DEFAULT_ALPN_LEN;
+    /* Set simple ALPN for internal transport (length-prefixed as required by quiche) */
+    static const uint8_t ALPN_TINC[] = "\x04tinc";
+    quiche_config_set_application_protos(qconf->config, ALPN_TINC, sizeof(ALPN_TINC) - 1);
+    free(qconf->alpn);
+    qconf->alpn = xmalloc(sizeof(ALPN_TINC) - 1);
+    memcpy(qconf->alpn, ALPN_TINC, sizeof(ALPN_TINC) - 1);
+    qconf->alpn_len = sizeof(ALPN_TINC) - 1;
 
 	logger(DEBUG_PROTOCOL, LOG_DEBUG, "Created QUIC config (%s mode)", is_server ? "server" : "client");
 
@@ -251,9 +283,15 @@ quic_conn_t *quic_conn_new_client(quiche_config *config, const char *server_name
 	qconn->state = QUIC_STATE_HANDSHAKE;
 	qconn->next_stream_id = 0;  // Client-initiated bidirectional streams start at 0
 
-	logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC client connection to %s", server_name);
+    logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC client connection to %s", server_name);
 
-	return qconn;
+    /* Proactively send Initial flight */
+    for(int i = 0; i < 4; ++i) {
+        ssize_t sent = quic_conn_send(qconn);
+        if(sent <= 0) break;
+    }
+
+    return qconn;
 }
 
 /* Create new server QUIC connection */
@@ -285,11 +323,11 @@ quic_conn_t *quic_conn_new_server(quiche_config *config, const uint8_t *dcid, si
 	socklen_t local_addr_len = sizeof(local_addr);
 	getsockname(sock_fd, (struct sockaddr *)&local_addr, &local_addr_len);
 
-	/* Create quiche connection */
-	qconn->conn = quiche_accept(qconn->scid, qconn->scid_len,
-	                             odcid, odcid_len,
-	                             (struct sockaddr *)&local_addr, local_addr_len,
-	                             addr, addr_len, config);
+    /* Create quiche connection: pass client's Original DCID for address validation */
+    qconn->conn = quiche_accept(qconn->scid, qconn->scid_len,
+                                 odcid, odcid_len,
+                                 (struct sockaddr *)&local_addr, local_addr_len,
+                                 addr, addr_len, config);
 
 	if(!qconn->conn) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to create quiche server connection");
@@ -349,9 +387,9 @@ ssize_t quic_conn_send(quic_conn_t *qconn) {
 	int packet_count = 0;
 
 	/* Send all pending QUIC packets */
-	while(true) {
-		quiche_send_info send_info;
-		ssize_t written = quiche_conn_send(qconn->conn, out, sizeof(out), &send_info);
+    while(true) {
+        quiche_send_info send_info;
+        ssize_t written = quiche_conn_send(qconn->conn, out, sizeof(out), &send_info);
 
 		if(written == QUICHE_ERR_DONE) {
 			break;  // No more packets to send
@@ -362,9 +400,9 @@ ssize_t quic_conn_send(quic_conn_t *qconn) {
 			return -1;
 		}
 
-		/* Log destination details */
-		char dest_addr[INET6_ADDRSTRLEN];
-		int dest_port = 0;
+        /* Log destination details */
+        char dest_addr[INET6_ADDRSTRLEN];
+        int dest_port = 0;
 		if(send_info.to.ss_family == AF_INET) {
 			struct sockaddr_in *sin = (struct sockaddr_in *)&send_info.to;
 			inet_ntop(AF_INET, &sin->sin_addr, dest_addr, sizeof(dest_addr));
@@ -375,19 +413,20 @@ ssize_t quic_conn_send(quic_conn_t *qconn) {
 			dest_port = ntohs(sin6->sin6_port);
 		}
 
-		logger(DEBUG_PROTOCOL, LOG_INFO, "Sending QUIC packet: %zd bytes to %s:%d via socket fd=%d (first_byte=0x%02x)",
-		       written, dest_addr, dest_port, qconn->sock_fd, out[0]);
+        const char *trace_id = quic_trace_id(qconn->conn);
+        logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC[%s] send: %zd bytes to %s:%d via fd=%d (first=0x%02x)",
+               trace_id ? trace_id : "-", written, dest_addr, dest_port, qconn->sock_fd, out[0]);
 
 		/* Send packet via UDP socket to the address specified in send_info */
 		ssize_t sent = sendto(qconn->sock_fd, out, written, 0,
 		                      (struct sockaddr *)&send_info.to, send_info.to_len);
 
-		if(sent != written) {
-			logger(DEBUG_PROTOCOL, LOG_WARNING, "sendto incomplete or failed: %zd/%zd (errno=%d: %s)",
-			       sent, written, errno, strerror(errno));
-		} else {
-			logger(DEBUG_PROTOCOL, LOG_INFO, "sendto() successful: %zd bytes sent", sent);
-		}
+        if(sent != written) {
+            logger(DEBUG_PROTOCOL, LOG_WARNING, "QUIC[%s] sendto incomplete or failed: %zd/%zd (errno=%d: %s)",
+                   trace_id, sent, written, errno, strerror(errno));
+        } else {
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC[%s] sendto OK: %zd bytes", trace_id, sent);
+        }
 
 		qconn->bytes_sent += sent;
 		qconn->packets_sent++;
@@ -395,9 +434,11 @@ ssize_t quic_conn_send(quic_conn_t *qconn) {
 		packet_count++;
 	}
 
-	if(packet_count > 0) {
-		logger(DEBUG_PROTOCOL, LOG_INFO, "Sent %d QUIC packets, %zd bytes total", packet_count, total_sent);
-	}
+    if(packet_count > 0) {
+        const char *trace_id = quic_trace_id(qconn->conn);
+        logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC[%s] sent %d packets, %zd bytes total",
+               trace_id, packet_count, total_sent);
+    }
 
 	return total_sent;
 }
@@ -424,24 +465,38 @@ ssize_t quic_conn_recv(quic_conn_t *qconn, const uint8_t *buf, size_t len) {
 	recv_info.to_len = local_addr_len;
 
 	/* Feed packet to quiche */
-	ssize_t done = quiche_conn_recv(qconn->conn, (uint8_t *)buf, len, &recv_info);
+    const char *trace_id = quic_trace_id(qconn->conn);
+    ssize_t done = quiche_conn_recv(qconn->conn, (uint8_t *)buf, len, &recv_info);
 
-	if(done < 0) {
-		logger(DEBUG_PROTOCOL, LOG_ERR, "quiche_conn_recv failed: %zd", done);
-		return -1;
-	}
+    if(done < 0) {
+        logger(DEBUG_PROTOCOL, LOG_ERR, "QUIC[%s] recv failed: %zd", trace_id, done);
+        return -1;
+    }
 
 	qconn->bytes_received += done;
 	qconn->packets_received++;
 
 	/* Check if handshake is complete */
-	if(!qconn->handshake_complete && quiche_conn_is_established(qconn->conn)) {
-		qconn->handshake_complete = true;
-		qconn->state = QUIC_STATE_ESTABLISHED;
-		logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC handshake complete");
-	}
+    if(!qconn->handshake_complete && quiche_conn_is_established(qconn->conn)) {
+        qconn->handshake_complete = true;
+        qconn->state = QUIC_STATE_ESTABLISHED;
+        /* Log negotiated ALPN */
+        const uint8_t *alp = NULL; size_t alp_len = 0;
+        quiche_conn_application_proto(qconn->conn, &alp, &alp_len);
+        char alpn_buf[64] = {0};
+        size_t copy = alp_len < sizeof(alpn_buf) - 1 ? alp_len : sizeof(alpn_buf) - 1;
+        if(alp && copy) memcpy(alpn_buf, alp, copy);
+        logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC[%s] handshake complete, ALPN='%s'", trace_id, alpn_buf);
+    }
 
-	return done;
+    /* Extra trace for debugging stalled handshakes */
+    if(!qconn->handshake_complete) {
+        bool est = quiche_conn_is_established(qconn->conn);
+        logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC[%s] handshake state: established=%d bytes_received=%zd",
+               trace_id, est, done);
+    }
+
+    return done;
 }
 
 /* Check if connection is established */
@@ -675,4 +730,9 @@ void quic_conn_set_node(quic_conn_t *qconn, void *node) {
 	if(qconn) {
 		qconn->node = node;
 	}
+}
+/* Enable quiche internal debug logging */
+static void quic_dbg_cb(const char *line, void *arg) {
+    (void)arg;
+    logger(DEBUG_PROTOCOL, LOG_DEBUG, "quiche: %s", line);
 }

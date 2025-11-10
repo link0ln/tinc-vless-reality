@@ -106,4 +106,9 @@ extern ssize_t quic_meta_recv(quic_conn_t *qconn, int64_t stream_id,
                                uint8_t *buf, size_t buf_len);
 extern bool quic_meta_stream_readable(quic_conn_t *qconn, int64_t stream_id);
 
+/* Return next readable stream id, or -1 if none */
+extern int64_t quic_meta_next_readable(quic_conn_t *qconn);
+/* Flush QUIC meta outbuf for given connection */
+extern void quic_transport_flush_meta(struct connection_t *c);
+
 #endif /* TINC_QUIC_TRANSPORT_H */

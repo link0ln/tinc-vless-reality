@@ -173,7 +173,10 @@ bool send_id(connection_t *c) {
 			return false;
 		}
 
-	return send_request(c, "%d %s %d.%d", ID, myself->connection->name, myself->connection->protocol_major, minor);
+    bool ok = send_request(c, "%d %s %d.%d", ID, myself->connection->name, myself->connection->protocol_major, minor);
+    logger(DEBUG_PROTOCOL, LOG_INFO, "send_id: node=%s host=%s quic_meta=%d ok=%d",
+           c->name ? c->name : "(nil)", c->hostname ? c->hostname : "(nil)", c->status.quic_meta, ok);
+    return ok;
 }
 
 static bool finalize_invitation(connection_t *c, const char *data, uint16_t len) {
@@ -508,11 +511,27 @@ bool id_h(connection_t *c, const char *request) {
 		return false;
 	}
 
-	c->allow_request = METAKEY;
+    c->allow_request = METAKEY;
 
-	if(!c->outgoing) {
-		send_id(c);
-	}
+    if(!c->outgoing) {
+        /* Immediate ACK only if QUIC meta actually active on this connection */
+        if(c->status.quic_meta) {
+            c->allow_request = ACK;
+            logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC meta: sending immediate ACK to %s", c->name);
+            if(!send_ack(c)) {
+                logger(DEBUG_PROTOCOL, LOG_WARNING, "Immediate ACK failed for %s, falling back to normal handshake", c->name);
+                /* Fall back to normal path */
+                send_id(c);
+            } else {
+                /* Flush ACK over QUIC meta stream immediately */
+                extern void quic_transport_flush_meta(connection_t *c);
+                quic_transport_flush_meta(c);
+            }
+        } else {
+            /* Non-QUIC: proceed with normal handshake */
+            send_id(c);
+        }
+    }
 
 	/* Disable SPTPS when VLESS is active to avoid double encryption */
 	if(c->status.vless_enabled && c->vless && disable_sptps_with_vless) {
@@ -524,8 +543,8 @@ bool id_h(connection_t *c, const char *request) {
 		return send_ack(c);
 	}
 
-	if(c->protocol_minor >= 2) {
-		c->allow_request = ACK;
+    if(c->protocol_minor >= 2) {
+        c->allow_request = ACK;
 		char label[25 + strlen(myself->name) + strlen(c->name)];
 
 		if(c->outgoing) {
@@ -534,10 +553,15 @@ bool id_h(connection_t *c, const char *request) {
 			snprintf(label, sizeof(label), "tinc TCP key expansion %s %s", c->name, myself->name);
 		}
 
-		return sptps_start(&c->sptps, c, c->outgoing, false, myself->connection->ecdsa, c->ecdsa, label, sizeof(label), send_meta_sptps, receive_meta_sptps);
-	} else {
-		return send_metakey(c);
-	}
+        /* If QUIC meta is active, SPTPS не используется для метаданных */
+        if(c->status.quic_meta) {
+            logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC meta active: skipping SPTPS start for %s", c->name);
+            return true;
+        }
+        return sptps_start(&c->sptps, c, c->outgoing, false, myself->connection->ecdsa, c->ecdsa, label, sizeof(label), send_meta_sptps, receive_meta_sptps);
+    } else {
+        return send_metakey(c);
+    }
 }
 
 #ifndef DISABLE_LEGACY
@@ -920,7 +944,10 @@ bool send_ack(connection_t *c) {
 		get_config_int(lookup_config(config_tree, "Weight"), &c->estimated_weight);
 	}
 
-	return send_request(c, "%d %s %d %x", ACK, myport, c->estimated_weight, (c->options & 0xffffff) | (experimental ? (PROT_MINOR << 24) : 0));
+    bool ok = send_request(c, "%d %s %d %x", ACK, myport, c->estimated_weight, (c->options & 0xffffff) | (experimental ? (PROT_MINOR << 24) : 0));
+    logger(DEBUG_PROTOCOL, LOG_INFO, "send_ack: to=%s host=%s quic_meta=%d ok=%d",
+           c->name ? c->name : "(nil)", c->hostname ? c->hostname : "(nil)", c->status.quic_meta, ok);
+    return ok;
 }
 
 static void send_everything(connection_t *c) {

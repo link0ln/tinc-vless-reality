@@ -35,12 +35,57 @@
 #include "../net.h"
 #include "../protocol.h"
 #include "quic_transport.h"
+#include <quiche.h>
 #include "quic.h"
 #include "quic_reality.h"
 #include "quic_fingerprint.h"
+#include "../event.h"
 
 /* Global QUIC manager */
 quic_manager_t *quic_manager = NULL;
+static timeout_t quic_timer;
+
+static void quic_timeout_handler(void *data) {
+    (void)data;
+    if(!quic_manager || !quic_manager->connections || !quic_manager->connections->head) {
+        /* Reschedule conservatively */
+        timeout_set(&quic_timer, &(struct timeval){0, 100000});
+        return;
+    }
+
+    /* Compute minimal timeout across connections */
+    uint64_t min_ns = UINT64_MAX;
+    for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+        quic_conn_t *qconn = (quic_conn_t *)n->data;
+        if(!qconn || !qconn->conn) continue;
+        uint64_t ns = quiche_conn_timeout_as_nanos(qconn->conn);
+        if(ns > 0 && ns < min_ns) {
+            min_ns = ns;
+        }
+    }
+
+    /* Drive timeouts now */
+    for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+        quic_conn_t *qconn = (quic_conn_t *)n->data;
+        if(!qconn || !qconn->conn) continue;
+        quiche_conn_on_timeout(qconn->conn);
+        while(true) {
+            ssize_t sent = quic_conn_send(qconn);
+            if(sent <= 0) break;
+        }
+    }
+
+    /* Reschedule at minimal timeout (fallback 50ms) */
+    if(min_ns == UINT64_MAX) {
+        timeout_set(&quic_timer, &(struct timeval){0, 50000});
+    } else {
+        struct timeval tv = { .tv_sec = (time_t)(min_ns / 1000000000ULL), .tv_usec = (suseconds_t)((min_ns % 1000000000ULL) / 1000ULL) };
+        timeout_set(&quic_timer, &tv);
+    }
+}
+
+/* Forward declaration for local helper used before its definition */
+static void quic_flush_meta_outbuf(connection_t *c, quic_conn_t *qconn);
 
 /* Transport mode */
 transport_mode_t transport_mode = TRANSPORT_UDP;
@@ -65,18 +110,25 @@ extern char *vless_reality_private_key;
 extern char *vless_reality_short_id;
 extern char *vless_reality_fingerprint;
 
-/* Форматирует Connection ID в hex строку для логирования */
+/* Форматирует Connection ID в hex строку для логирования
+ * ВАЖНО: используем кольцевой буфер из нескольких слотов, чтобы
+ * одновременные вызовы в одном выражении логгера не перезаписывали
+ * предыдущие результаты (static-buffer pitfall). */
+static const size_t CID_STR_SLOTS = 4;
 static char *format_cid(const uint8_t *cid, size_t len) {
-	static char buf[128];
-	if(len == 0 || len > 20) {
-		snprintf(buf, sizeof(buf), "<empty>");
-		return buf;
-	}
-	char *p = buf;
-	for(size_t i = 0; i < len && i < 20; i++) {
-		p += sprintf(p, "%02x", cid[i]);
-	}
-	return buf;
+    static char bufs[4][128];
+    static unsigned idx = 0;
+    char *buf = bufs[idx++ % CID_STR_SLOTS];
+    if(len == 0 || len > 20 || !cid) {
+        snprintf(buf, sizeof(bufs[0]), "<empty>");
+        return buf;
+    }
+    char *p = buf;
+    for(size_t i = 0; i < len && i < 20; i++) {
+        p += sprintf(p, "%02x", cid[i]);
+    }
+    *p = '\0';
+    return buf;
 }
 
 /* Connection comparison function for splay tree */
@@ -289,8 +341,11 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
 		return false;
 	}
 
-	quic_manager->initialized = true;
-	quic_manager->enabled = true;
+    quic_manager->initialized = true;
+    quic_manager->enabled = true;
+
+    /* Start periodic QUIC timeout driver */
+    timeout_add(&quic_timer, quic_timeout_handler, &quic_timer, &(struct timeval){0, 10000});
 
 	/* Initialize Reality configuration if enabled */
 	if(vless_reality_enabled) {
@@ -680,7 +735,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 		return;
 	}
 
-	/* Parse QUIC header to get connection ID for demultiplexing */
+    /* Parse QUIC header to get connection ID for demultiplexing */
 	uint8_t type;
 	uint32_t version;
 	uint8_t scid[QUICHE_MAX_CONN_ID_LEN];
@@ -690,11 +745,13 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	uint8_t token[256];
 	size_t token_len = sizeof(token);
 
-	int rc = quiche_header_info(buf, len, LOCAL_CONN_ID_LEN,
-	                             &version, &type,
-	                             scid, &scid_len,
-	                             dcid, &dcid_len,
-	                             token, &token_len);
+    /* NOTE: Use a destination CID length hint of 0 to let quiche parse DCID length from packet.
+     * Using a fixed LOCAL_CONN_ID_LEN can cause DCID==SCID in logs when lengths mismatch. */
+    int rc = quiche_header_info(buf, len, 0,
+                                 &version, &type,
+                                 scid, &scid_len,
+                                 dcid, &dcid_len,
+                                 token, &token_len);
 
 	/* Log parsed header information */
 	if(rc >= 0) {
@@ -710,9 +767,9 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 
 	quic_conn_t *qconn = NULL;
 
-	if(rc >= 0 && dcid_len > 0) {
-		/* Try to find existing connection by DCID (our SCID) */
-		qconn = lookup_connection_by_id(dcid, dcid_len);
+    if(rc >= 0 && dcid_len > 0) {
+        /* Try to find existing connection by DCID (our SCID) */
+        qconn = lookup_connection_by_id(dcid, dcid_len);
 
 		if(qconn) {
 			logger(DEBUG_PROTOCOL, LOG_DEBUG, "CID lookup SUCCESS: Found connection for DCID=%s",
@@ -723,32 +780,40 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 		}
 	}
 
-	/* Fallback: if CID lookup failed, try peer address lookup
-	 * This handles Initial packets where client doesn't know our CID yet */
-	if(!qconn && from) {
-		for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
-			quic_conn_t *candidate = (quic_conn_t *)n->data;
-			if(candidate && candidate->peer_addr.ss_family == from->sa_family) {
-				bool match = false;
-				if(from->sa_family == AF_INET) {
-					struct sockaddr_in *addr1 = (struct sockaddr_in *)&candidate->peer_addr;
-					struct sockaddr_in *addr2 = (struct sockaddr_in *)from;
-					match = (addr1->sin_port == addr2->sin_port &&
-					         memcmp(&addr1->sin_addr, &addr2->sin_addr, sizeof(addr1->sin_addr)) == 0);
-				} else if(from->sa_family == AF_INET6) {
-					struct sockaddr_in6 *addr1 = (struct sockaddr_in6 *)&candidate->peer_addr;
-					struct sockaddr_in6 *addr2 = (struct sockaddr_in6 *)from;
-					match = (addr1->sin6_port == addr2->sin6_port &&
-					         memcmp(&addr1->sin6_addr, &addr2->sin6_addr, sizeof(addr1->sin6_addr)) == 0);
-				}
-				if(match) {
-					qconn = candidate;
-					logger(DEBUG_PROTOCOL, LOG_DEBUG, "Found connection by peer address fallback");
-					break;
-				}
-			}
-		}
-	}
+    /* Fallback: if CID lookup failed, try peer address lookup
+     * IMPORTANT: do not bind incoming packets to an existing CLIENT-side connection,
+     * or handshake will stall. Only consider server-side (incoming) connections here. */
+    if(!qconn && from) {
+        for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+            quic_conn_t *candidate = (quic_conn_t *)n->data;
+            if(!candidate) {
+                continue;
+            }
+            /* Skip client-initiated connections */
+            if(candidate->is_client) {
+                continue;
+            }
+            if(candidate->peer_addr.ss_family == from->sa_family) {
+                bool match = false;
+                if(from->sa_family == AF_INET) {
+                    struct sockaddr_in *addr1 = (struct sockaddr_in *)&candidate->peer_addr;
+                    struct sockaddr_in *addr2 = (struct sockaddr_in *)from;
+                    match = (addr1->sin_port == addr2->sin_port &&
+                             memcmp(&addr1->sin_addr, &addr2->sin_addr, sizeof(addr1->sin_addr)) == 0);
+                } else if(from->sa_family == AF_INET6) {
+                    struct sockaddr_in6 *addr1 = (struct sockaddr_in6 *)&candidate->peer_addr;
+                    struct sockaddr_in6 *addr2 = (struct sockaddr_in6 *)from;
+                    match = (addr1->sin6_port == addr2->sin6_port &&
+                             memcmp(&addr1->sin6_addr, &addr2->sin6_addr, sizeof(addr1->sin6_addr)) == 0);
+                }
+                if(match) {
+                    qconn = candidate;
+                    logger(DEBUG_PROTOCOL, LOG_DEBUG, "Found connection by peer address fallback");
+                    break;
+                }
+            }
+        }
+    }
 
 	/* For client connections: register peer SCID from packet header BEFORE processing packet
 	 * This allows quiche to recognize the DCID in server responses during handshake */
@@ -772,15 +837,15 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 		}
 	}
 
-	if(qconn) {
-		/* Feed packet to connection */
-		ssize_t done = quic_conn_recv(qconn, buf, len);
+    if(qconn) {
+        /* Feed packet to connection; loop until quiche reports no more packets to send */
+        ssize_t done = quic_conn_recv(qconn, buf, len);
+        
+        if(done > 0) {
+            quic_manager->packets_received++;
+            quic_manager->bytes_received += done;
 
-		if(done > 0) {
-			quic_manager->packets_received++;
-			quic_manager->bytes_received += done;
-
-			/* Check if we need to bind server connection to node */
+        /* Check if we need to bind server connection to node */
 			bool is_established = quic_conn_is_established(qconn);
 			if(is_established && !qconn->node && qconn->peer_addr.ss_family != 0) {
 				/* Server-side connection needs node binding */
@@ -865,8 +930,8 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 				}
 
 				if(!qconn->node) {
-					logger(DEBUG_PROTOCOL, LOG_INFO, "Could not find node for server connection from %s - will bind via ID message",
-					       sockaddr2hostname(&qconn->peer_addr));
+                    logger(DEBUG_PROTOCOL, LOG_INFO, "Could not find node for server connection from %s - will bind via ID message",
+                           sockaddr2hostname((sockaddr_t *)&qconn->peer_addr));
 
 					/* Hybrid binding approach: Create connection_t without node for incoming connection
 					 * Node will be bound when ID message is received in id_h() handler */
@@ -919,60 +984,88 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 			node_t *n = (node_t *)qconn->node;
 			connection_t *c = n->connection;
 
-			logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC state check for %s: established=%d, connection=%p, quic_meta=%d, initiated=%d",
-			       n->name, is_established, (void*)c,
-			       c ? c->status.quic_meta : -1,
-			       c ? c->status.meta_protocol_initiated : -1);
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC state check for %s: established=%d, connection=%p, quic_meta=%d, quic_stream_id=%ld, outgoing=%p, initiated=%d",
+                   n->name, is_established, (void*)c,
+                   c ? c->status.quic_meta : -1,
+                   c ? (long)c->quic_stream_id : -1L,
+                   c ? (void*)c->outgoing : NULL,
+                   c ? c->status.meta_protocol_initiated : -1);
 
-			if(is_established) {
-				/* For QUIC connections, we don't need c->outgoing to be set */
-				/* QUIC client connections are identified by qconn->is_client */
-				if(c && !c->status.meta_protocol_initiated && c->status.quic_meta) {
-					logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC handshake complete for %s, initiating metadata protocol",
-					       n->name);
+            if(is_established) {
+                /* For QUIC connections, we don't need c->outgoing to be set */
+                /* QUIC client connections are identified by qconn->is_client */
+                if(c && !c->status.meta_protocol_initiated && c->status.quic_meta) {
+                    logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC handshake complete for %s, initiating metadata protocol",
+                           n->name);
 
 					/* Create or discover metadata stream NOW - after handshake, before finish_connecting()
 					 * This ensures the stream is immediately usable for ID/ACK exchange */
-					if(c->quic_stream_id < 0) {
-						/* Client: discover stream created by server */
-						if(qconn->is_client) {
-							logger(DEBUG_PROTOCOL, LOG_INFO, "Attempting stream discovery for %s after handshake", n->name);
-							quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
-							if(readable) {
-								uint64_t stream_id;
-								if(quiche_stream_iter_next(readable, &stream_id)) {
-									c->quic_stream_id = stream_id;
-									logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld from %s after handshake",
-									       (long)stream_id, n->name);
-								} else {
-									logger(DEBUG_PROTOCOL, LOG_WARNING, "No readable streams yet for %s after handshake", n->name);
-									quiche_stream_iter_free(readable);
-									return;  /* Wait for next packet */
-								}
-								quiche_stream_iter_free(readable);
-							} else {
-								logger(DEBUG_PROTOCOL, LOG_WARNING, "quiche_conn_readable returned NULL for %s", n->name);
-								return;  /* Wait for next packet */
-							}
-						} else {
-							/* Server: create stream (should not happen here, streams are created for unbound connections) */
-							int64_t stream_id = quic_meta_create_stream(qconn);
-							if(stream_id >= 0) {
-								c->quic_stream_id = stream_id;
-								logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC meta stream %ld for %s after handshake",
-								       (long)stream_id, n->name);
-							} else {
-								logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC meta stream for %s after handshake",
-								       n->name);
-								return;  /* Do not call finish_connecting if stream creation fails */
-							}
-						}
-					}
+                        if(c->quic_stream_id < 0) {
+                            if(qconn->is_client) {
+                                /* Try to discover server-initiated stream */
+                                logger(DEBUG_PROTOCOL, LOG_INFO, "Attempting stream discovery for %s after handshake", n->name);
+                                quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
+                                bool discovered = false;
+                                if(readable) {
+                                    uint64_t stream_id;
+                                    if(quiche_stream_iter_next(readable, &stream_id)) {
+                                        c->quic_stream_id = stream_id;
+                                        discovered = true;
+                                        logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld from %s after handshake",
+                                               (long)stream_id, n->name);
+                                    }
+                                    quiche_stream_iter_free(readable);
+                                }
+                                /* If not discovered, proactively create client stream */
+                                if(!discovered) {
+                                    int64_t stream_id = quic_meta_create_stream(qconn);
+                                    if(stream_id >= 0) {
+                                        c->quic_stream_id = stream_id;
+                                        logger(DEBUG_PROTOCOL, LOG_INFO, "Created client QUIC meta stream %ld for %s after handshake",
+                                               (long)stream_id, n->name);
+                                    } else {
+                                        logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create client QUIC meta stream for %s", n->name);
+                                        return;
+                                    }
+                                }
+                            } else {
+                                /* Server: create stream if not present */
+                                int64_t stream_id = quic_meta_create_stream(qconn);
+                                if(stream_id >= 0) {
+                                    c->quic_stream_id = stream_id;
+                                    logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC meta stream %ld for %s after handshake",
+                                           (long)stream_id, n->name);
+                                } else {
+                                    logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC meta stream for %s after handshake",
+                                           n->name);
+                                    return;
+                                }
+                            }
+                        }
 
-					c->status.meta_protocol_initiated = 1;
-					finish_connecting(c);
-				}
-			}
+                        /* Kick off metadata protocol by sending ID now */
+                        c->status.meta_protocol_initiated = 1;
+                        if(!send_id(c)) {
+                            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to queue ID for %s", n->name);
+                        } else {
+                            logger(DEBUG_PROTOCOL, LOG_INFO, "Queued ID for %s on QUIC meta stream %ld",
+                                   n->name, (long)c->quic_stream_id);
+                        }
+                        /* Immediately flush initial ID over QUIC stream */
+                        quic_conn_t *qc = quic_transport_get_connection(n, NULL);
+                        if(qc) {
+                            quic_flush_meta_outbuf(c, qc);
+                            /* If stream has readable data (e.g. immediate ACK), process it */
+                            if(quic_meta_stream_readable(qc, c->quic_stream_id)) {
+                                logger(DEBUG_META, LOG_DEBUG, "QUIC meta: stream %ld readable for %s, invoking receive_meta",
+                                       (long)c->quic_stream_id, n->name);
+                                receive_meta(c);
+                            }
+                        }
+                        /* Continue with normal post-connect processing */
+                        finish_connecting(c);
+                    }
+                }
 		}
 
 		/* Try to read VPN packets from streams */
@@ -1018,8 +1111,8 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 
 				if(node->connection) {
 					connection_t *c = node->connection;
-					logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC checking connection: name=%s, quic_meta=%d, quic_stream_id=%ld, outgoing=%d",
-					       c->name ? c->name : "NULL", c->status.quic_meta, (long)c->quic_stream_id, c->outgoing);
+                    logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC checking connection: name=%s, quic_meta=%d, quic_stream_id=%ld, outgoing=%p",
+                           c->name ? c->name : "NULL", c->status.quic_meta, (long)c->quic_stream_id, (void*)c->outgoing);
 
 					/* If this connection has a QUIC meta stream, check for readable data */
 					if(c->status.quic_meta) {
@@ -1066,14 +1159,19 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 				quic_conn_flush_buffered_packets(qconn);
 			}
 
-			/* Send any pending QUIC packets */
-			quic_conn_send(qconn);
+            /* Send any pending QUIC packets; keep sending until QUICHE_ERR_DONE */
+            while(true) {
+                ssize_t sent = quic_conn_send(qconn);
+                if(sent <= 0) break;
+            }
+            /* Drive quiche timeouts to progress handshake */
+            quiche_conn_on_timeout(qconn->conn);
 
 			return;  // Packet processed
 		}
 	}
 
-	/* No existing connection handled this packet */
+    /* No existing connection handled this packet */
 	/* Check if it's a new connection (Initial packet) */
 
 	/* Header was already parsed above for demultiplexing */
@@ -1155,11 +1253,11 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 		return;
 	}
 
-	/* Create new server connection */
-	qconn = quic_conn_new_server(quic_manager->server_config->config,
-	                              scid, scid_len,  /* SCID from client becomes our DCID */
-	                              dcid, dcid_len,  /* DCID from client is ODCID */
-	                              from, fromlen, sock_fd);
+    /* Create new server connection */
+    qconn = quic_conn_new_server(quic_manager->server_config->config,
+                                  dcid, dcid_len,  /* Client DCID becomes our DCID */
+                                  scid, scid_len,  /* Client SCID becomes our ODCID */
+                                  from, fromlen, sock_fd);
 
 	if(!qconn) {
 		logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create server connection");
@@ -1186,8 +1284,8 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 
 	logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC server connection for new client");
 
-	/* Process the Initial packet */
-	ssize_t done = quic_conn_recv(qconn, buf, len);
+    /* Process the Initial packet */
+    ssize_t done = quic_conn_recv(qconn, buf, len);
 
 	if(done < 0) {
 		logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process Initial packet: %zd", done);
@@ -1199,8 +1297,12 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	quic_manager->packets_received++;
 	quic_manager->bytes_received += done;
 
-	/* Send response (Handshake packet) */
-	quic_conn_send(qconn);
+    /* Send response (Handshake packet) */
+    while(true) {
+        ssize_t sent = quic_conn_send(qconn);
+        if(sent <= 0) break;
+    }
+    quiche_conn_on_timeout(qconn->conn);
 }
 
 /* Event loop callback for incoming QUIC data
@@ -1380,4 +1482,46 @@ bool quic_meta_stream_readable(quic_conn_t *qconn, int64_t stream_id) {
 
 	quiche_stream_iter_free(readable);
 	return found;
+}
+
+/* Return next readable stream id, or -1 if none */
+int64_t quic_meta_next_readable(quic_conn_t *qconn) {
+    if(!qconn || !qconn->conn) {
+        return -1;
+    }
+    quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
+    if(!readable) {
+        return -1;
+    }
+    uint64_t sid = 0;
+    if(!quiche_stream_iter_next(readable, &sid)) {
+        quiche_stream_iter_free(readable);
+        return -1;
+    }
+    quiche_stream_iter_free(readable);
+    return (int64_t)sid;
+}
+/* Helper: flush metadata outbuf over QUIC stream */
+static void quic_flush_meta_outbuf(connection_t *c, quic_conn_t *qconn) {
+    if(!c || !qconn) return;
+    if(c->quic_stream_id < 0) return;
+    ssize_t outlen = 0;
+    if(c->outbuf.len > c->outbuf.offset) {
+        logger(DEBUG_META, LOG_DEBUG, "QUIC meta: flushing %d bytes from outbuf via stream %ld",
+               c->outbuf.len - c->outbuf.offset, (long)c->quic_stream_id);
+        outlen = quic_meta_send(qconn, c->quic_stream_id,
+                                (const uint8_t *)(c->outbuf.data + c->outbuf.offset),
+                                c->outbuf.len - c->outbuf.offset);
+        if(outlen > 0) {
+            buffer_read(&c->outbuf, outlen);
+        }
+    }
+}
+
+/* Public helper to flush meta outbuf via QUIC for given connection's node */
+void quic_transport_flush_meta(connection_t *c) {
+    if(!c || !c->node) return;
+    quic_conn_t *qconn = quic_transport_get_connection(c->node, NULL);
+    if(!qconn) return;
+    quic_flush_meta_outbuf(c, qconn);
 }
