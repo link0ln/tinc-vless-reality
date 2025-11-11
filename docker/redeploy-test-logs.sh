@@ -8,10 +8,10 @@ docker compose -f docker-compose.optimized.yml up -d --force-recreate --no-deps
 docker ps
 
 # Quick connectivity checks (non-interactive exec)
-docker exec tinc-node2 ping -c 3 10.0.0.1 || true
-docker exec tinc-node2 ping -c 3 10.0.0.3 || true
-docker exec tinc-node3 ping -c 3 10.0.0.1 || true
-docker exec tinc-node1 ping -c 3 10.0.0.2 || true
+docker exec tinc-node2 ping -c 1 10.0.0.1 || true
+docker exec tinc-node2 ping -c 1 10.0.0.3 || true
+docker exec tinc-node3 ping -c 1 10.0.0.1 || true
+docker exec tinc-node1 ping -c 1 10.0.0.2 || true
 
 # Show interface and routes for each node
 echo "--- node1 ifaces/routes ---"
