@@ -990,37 +990,20 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					c->status.quic_meta = true;
 					c->status.sptps_disabled = true;
 
-					/* Create metadata stream for this unbound connection */
-					int64_t stream_id = quic_meta_create_stream(qconn);
+					/* Server does NOT create its own stream - it will discover client's stream 0
+					 * and use it for bidirectional communication */
+					c->quic_stream_id = -1;  // Will be set when client stream is discovered
 
-					if(stream_id >= 0) {
-						c->quic_stream_id = stream_id;
-						logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC meta stream %ld for unbound incoming connection from %s",
-						       (long)stream_id, c->hostname);
+					/* Add to connection list - will be linked to node when ID message arrives */
+					connection_add(c);
 
-						/* Add to connection list - will be linked to node when ID message arrives */
-						connection_add(c);
+					/* Server waits to receive client's ID on client-initiated stream 0
+					 * Server will respond with its own ID on the same stream */
+					c->allow_request = ID;
+					c->status.meta_protocol_initiated = 0;  // Will be set when stream is discovered
 
-                    /* Initiate metadata protocol: both send and receive ID */
-                    c->allow_request = ID;
-                    c->status.meta_protocol_initiated = 1;
-
-                    /* Server sends ID first, then waits for client ID */
-                    if(!send_id(c)) {
-                        logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to send ID to incoming QUIC from %s", c->hostname);
-                    } else {
-                        logger(DEBUG_PROTOCOL, LOG_INFO, "Sent ID to incoming QUIC from %s, now waiting for peer ID", c->hostname);
-                        /* Flush the ID message immediately */
-                        quic_flush_meta_outbuf(c, qconn);
-                    }
-
-						logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for unbound incoming QUIC from %s, waiting for ID message",
-						       c->hostname);
-					} else {
-						logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC meta stream for incoming connection from %s",
-						       c->hostname);
-						free_connection(c);
-					}
+					logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for unbound incoming QUIC from %s, waiting for client stream and ID message",
+					       c->hostname);
 				}
 			}
 
