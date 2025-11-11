@@ -1,5 +1,5 @@
 ===========================================
-TINC QUIC TEST - Wed Nov 12 01:21:11 MSK 2025
+TINC QUIC TEST - Wed Nov 12 01:58:39 MSK 2025
 ===========================================
 
 === Building Docker images ===
@@ -18,7 +18,7 @@ Just set COMPOSE_BAKE=true
 #3 DONE 0.0s
 
 #2 [node1 internal] load metadata for docker.io/library/ubuntu:22.04
-#2 DONE 1.0s
+#2 DONE 7.3s
 
 #4 [node1 internal] load .dockerignore
 #4 transferring context: 616B done
@@ -28,25 +28,25 @@ Just set COMPOSE_BAKE=true
 #5 DONE 0.0s
 
 #6 [node1 internal] load build context
-#6 transferring context: 1.66MB 1.0s done
-#6 DONE 1.0s
+#6 transferring context: 1.62MB 1.4s done
+#6 DONE 1.5s
 
-#7 [node1 tinc-builder 3/9] WORKDIR /build
+#7 [node1 quiche-builder 5/6] COPY deps/quiche /build/deps/quiche
 #7 CACHED
 
-#8 [node1 tinc-builder 6/9] RUN ldconfig
+#8 [node1 quiche-builder 6/6] RUN cd deps/quiche &&     cargo build --release --features ffi,pkg-config-meta
 #8 CACHED
 
-#9 [node1 quiche-builder 4/6] WORKDIR /build
+#9 [node1 quiche-builder 2/6] RUN apt-get update && apt-get install -y     build-essential     curl     git     libssl-dev     pkg-config     cmake     libclang-dev     clang     && rm -rf /var/lib/apt/lists/*
 #9 CACHED
 
-#10 [node1 quiche-builder 6/6] RUN cd deps/quiche &&     cargo build --release --features ffi,pkg-config-meta
+#10 [node1 quiche-builder 3/6] RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 #10 CACHED
 
-#11 [node1 tinc-builder 2/9] RUN apt-get update && apt-get install -y     build-essential     autoconf     automake     libtool     libssl-dev     zlib1g-dev     liblzo2-dev     libncurses5-dev     libreadline-dev     && rm -rf /var/lib/apt/lists/*
+#11 [node1 quiche-builder 4/6] WORKDIR /build
 #11 CACHED
 
-#12 [node1 quiche-builder 5/6] COPY deps/quiche /build/deps/quiche
+#12 [node1 tinc-builder 6/9] RUN ldconfig
 #12 CACHED
 
 #13 [node1 tinc-builder 4/9] COPY --from=quiche-builder /build/deps/quiche/target/release/libquiche.so /usr/lib/
@@ -55,362 +55,362 @@ Just set COMPOSE_BAKE=true
 #14 [node1 tinc-builder 5/9] COPY --from=quiche-builder /build/deps/quiche/quiche/include/quiche.h /usr/include/
 #14 CACHED
 
-#15 [node1 quiche-builder 2/6] RUN apt-get update && apt-get install -y     build-essential     curl     git     libssl-dev     pkg-config     cmake     libclang-dev     clang     && rm -rf /var/lib/apt/lists/*
+#15 [node1 tinc-builder 2/9] RUN apt-get update && apt-get install -y     build-essential     autoconf     automake     libtool     libssl-dev     zlib1g-dev     liblzo2-dev     libncurses5-dev     libreadline-dev     && rm -rf /var/lib/apt/lists/*
 #15 CACHED
 
-#16 [node1 quiche-builder 3/6] RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+#16 [node1 tinc-builder 3/9] WORKDIR /build
 #16 CACHED
 
 #17 [node1 tinc-builder 7/9] COPY --from=quiche-builder /build/deps/quiche /build/deps/quiche
 #17 CACHED
 
 #18 [node1 tinc-builder 8/9] COPY . /build/
-#18 DONE 85.4s
+#18 DONE 58.4s
 
 #19 [node1 tinc-builder 9/9] RUN autoreconf -fsi &&     ./configure         --prefix=/usr         --sysconfdir=/etc         --localstatedir=/var         --with-openssl         --enable-maintainer-mode &&     make &&     make install
-#19 2.504 sh: 1: git: not found
-#19 3.083 sh: 1: git: not found
-#19 3.334 sh: 1: git: not found
-#19 3.488 configure.ac:17: warning: The macro `AC_PROG_CC_STDC' is obsolete.
-#19 3.488 configure.ac:17: You should run autoupdate.
-#19 3.488 ./lib/autoconf/c.m4:1666: AC_PROG_CC_STDC is expanded from...
-#19 3.488 configure.ac:17: the top level
-#19 3.825 sh: 1: git: not found
-#19 4.929 configure: WARNING: unrecognized options: --enable-maintainer-mode
-#19 4.980 checking for a BSD-compatible install... /usr/bin/install -c
-#19 4.995 checking whether build environment is sane... yes
-#19 5.006 checking for a race-free mkdir -p... /usr/bin/mkdir -p
-#19 5.009 checking for gawk... no
-#19 5.009 checking for mawk... mawk
-#19 5.009 checking whether make sets $(MAKE)... yes
-#19 5.027 checking whether make supports nested variables... yes
-#19 5.038 checking whether make supports nested variables... (cached) yes
-#19 5.038 checking whether make supports the include directive... yes (GNU style)
-#19 5.048 checking for gcc... gcc
-#19 5.083 checking whether the C compiler works... yes
-#19 5.213 checking for C compiler default output file name... a.out
-#19 5.214 checking for suffix of executables... 
-#19 5.246 checking whether we are cross compiling... no
-#19 5.300 checking for suffix of object files... o
-#19 5.321 checking whether the compiler supports GNU C... yes
-#19 5.342 checking whether gcc accepts -g... yes
-#19 5.365 checking for gcc option to enable C11 features... none needed
-#19 5.448 checking whether gcc understands -c and -o together... yes
-#19 5.483 checking dependency style of gcc... gcc3
-#19 5.521 checking for stdio.h... yes
-#19 5.540 checking for stdlib.h... yes
-#19 5.580 checking for string.h... yes
-#19 5.611 checking for inttypes.h... yes
-#19 5.641 checking for stdint.h... yes
-#19 5.671 checking for strings.h... yes
-#19 5.694 checking for sys/stat.h... yes
-#19 5.728 checking for sys/types.h... yes
-#19 5.755 checking for unistd.h... yes
-#19 5.797 checking for wchar.h... yes
-#19 5.839 checking for minix/config.h... no
-#19 5.873 checking whether it is safe to define __EXTENSIONS__... yes
-#19 5.909 checking whether _XOPEN_SOURCE should be defined... no
-#19 5.934 checking for gcc... (cached) gcc
-#19 5.966 checking whether the compiler supports GNU C... (cached) yes
-#19 5.966 checking whether gcc accepts -g... (cached) yes
-#19 5.967 checking for gcc option to enable C11 features... (cached) none needed
-#19 5.967 checking whether gcc understands -c and -o together... (cached) yes
-#19 5.967 checking dependency style of gcc... (cached) gcc3
-#19 5.967 checking how to run the C preprocessor... gcc -E
-#19 6.026 checking for a sed that does not truncate output... /usr/bin/sed
-#19 6.032 checking whether to build with code coverage support... no
-#19 6.038 checking build system type... x86_64-pc-linux-gnu
-#19 6.086 checking host system type... x86_64-pc-linux-gnu
-#19 6.104 checking CFLAGS for maximum warnings... -Wall
-#19 6.146 checking whether C compiler accepts -DFORTIFY_SOURCE=2... yes
-#19 6.166 checking whether C compiler accepts -fwrapv... yes
-#19 6.185 checking whether C compiler accepts -fPIE... yes
-#19 6.206 checking whether the linker accepts -pie... yes
-#19 6.249 checking whether the linker accepts -Wl,-z,relro... yes
-#19 6.286 checking whether the linker accepts -Wl,-z,now... yes
-#19 6.320 checking for syslog.h... yes
-#19 6.363 checking for sys/file.h... yes
-#19 6.411 checking for sys/ioctl.h... yes
-#19 6.460 checking for sys/mman.h... yes
-#19 6.514 checking for sys/param.h... yes
-#19 6.571 checking for sys/resource.h... yes
-#19 6.614 checking for sys/socket.h... yes
-#19 6.653 checking for sys/time.h... yes
-#19 6.695 checking for sys/un.h... yes
-#19 6.738 checking for sys/wait.h... yes
-#19 6.773 checking for netdb.h... yes
-#19 6.816 checking for arpa/inet.h... yes
-#19 6.858 checking for dirent.h... yes
-#19 6.891 checking for getopt.h... yes
-#19 6.925 checking for stddef.h... yes
-#19 6.963 checking for net/if.h... yes
-#19 7.107 checking for net/if_types.h... no
-#19 7.183 checking for net/ethernet.h... yes
-#19 7.269 checking for net/if_arp.h... yes
-#19 7.357 checking for netinet/in_systm.h... yes
-#19 7.424 checking for netinet/in.h... yes
-#19 7.488 checking for netinet/in6.h... no
-#19 7.552 checking for netpacket/packet.h... yes
-#19 7.627 checking for netinet/if_ether.h... yes
-#19 7.732 checking for netinet/ip.h... yes
-#19 7.809 checking for netinet/ip6.h... yes
-#19 7.879 checking for resolv.h... yes
-#19 7.953 checking for netinet/tcp.h... yes
-#19 8.028 checking for netinet/ip_icmp.h... yes
-#19 8.102 checking for netinet/icmp6.h... yes
-#19 8.171 checking for working __malloc__ attribute... yes
-#19 8.192 checking for working __nonnull__ attribute... yes
-#19 8.214 checking for working __warn_unused_result__ attribute... yes
-#19 8.235 checking for struct ether_header... yes
-#19 8.386 checking for struct arphdr... yes
-#19 8.553 checking for struct ether_arp... yes
-#19 8.733 checking for struct ip... yes
-#19 8.893 checking for struct icmp... yes
-#19 9.057 checking for struct ip6_hdr... yes
-#19 9.219 checking for struct icmp6_hdr... yes
-#19 9.387 checking for struct nd_neighbor_solicit... yes
-#19 9.542 checking for struct nd_opt_hdr... yes
-#19 9.699 checking for asprintf... yes
-#19 9.743 checking for daemon... yes
-#19 9.781 checking for fchmod... yes
-#19 9.823 checking for flock... yes
-#19 9.864 checking for fork... yes
-#19 9.915 checking for gettimeofday... yes
-#19 9.954 checking for mlockall... yes
-#19 9.997 checking for putenv... yes
-#19 10.03 checking for recvmmsg... yes
-#19 10.08 checking for strsignal... yes
-#19 10.12 checking for nanosleep... yes
-#19 10.16 checking for unsetenv... yes
-#19 10.20 checking for vsyslog... yes
-#19 10.24 checking for devname... no
-#19 10.30 checking for fdevname... no
-#19 10.34 checking for getopt_long... yes
-#19 10.38 checking for gcc options needed to detect all undeclared functions... none needed
-#19 10.42 checking whether res_init is declared... yes
-#19 10.47 checking for res_init in -lresolv... no
-#19 12.63 checking for linux/if_tun.h... yes
-#19 12.73 checking for curses.h... yes
-#19 12.77 checking for initscr in -lncurses... yes
-#19 12.81 checking for wtimeout in -ltinfo... yes
-#19 12.85 checking for readline/readline.h... yes
-#19 12.90 checking for readline/history.h... yes
-#19 12.95 checking for readline in -lreadline... yes
-#19 13.00 checking for zlib.h... yes
-#19 13.04 checking for compress2 in -lz... yes
-#19 13.07 checking for lzo1x_1_compress in -llzo2... yes
-#19 13.12 checking for lzo/lzo1x.h... yes
-#19 13.16 checking for dlopen... yes
-#19 13.21 checking for openssl/evp.h... yes
-#19 13.30 checking for openssl/rsa.h... yes
-#19 13.38 checking for openssl/rand.h... yes
-#19 13.46 checking for openssl/err.h... yes
-#19 13.52 checking for openssl/sha.h... yes
-#19 13.57 checking for openssl/pem.h... yes
-#19 13.70 checking for openssl/engine.h... yes
-#19 13.81 checking for EVP_EncryptInit_ex in -lcrypto... yes
-#19 13.89 checking for SSL_new in -lssl... yes
-#19 13.97 checking for RAND_bytes... yes
-#19 14.08 checking for EVP_EncryptInit_ex... yes
-#19 14.19 checking for EVP_CIPHER_CTX_new... yes
-#19 14.29 checking whether OpenSSL_add_all_algorithms is declared... yes
-#19 14.36 checking whether EVP_aes_256_cfb is declared... yes
-#19 14.44 checking for BN_GENCB_new... yes
-#19 14.54 checking for ERR_remove_state... yes
-#19 14.62 checking for RSA_set0_key... yes
-#19 14.70 checking for HMAC_CTX_new... yes
-#19 14.80 checking that generated files are newer than configure... done
-#19 14.80 configure: creating ./config.status
-#19 14.91 config.status: creating Makefile
-#19 14.93 config.status: creating src/Makefile
-#19 14.95 config.status: creating doc/Makefile
-#19 14.97 config.status: creating test/Makefile
-#19 14.99 config.status: creating test/testlib.sh
-#19 15.01 config.status: creating systemd/Makefile
-#19 15.04 config.status: creating bash_completion.d/Makefile
-#19 15.06 config.status: creating config.h
-#19 15.06 config.status: config.h is unchanged
-#19 15.06 config.status: executing depfiles commands
-#19 15.12 configure: WARNING: unrecognized options: --enable-maintainer-mode
-#19 15.17 make  all-recursive
-#19 15.17 make[1]: Entering directory '/build'
-#19 15.17 Making all in src
-#19 15.23 make[2]: Entering directory '/build/src'
-#19 15.23   CC       address_cache.o
-#19 15.49   CC       autoconnect.o
-#19 15.68   CC       conf.o
-#19 15.93   CC       connection.o
-#19 16.11   CC       control.o
-#19 16.31   CC       dummy_device.o
-#19 16.46   CC       edge.o
-#19 16.64   CC       event.o
-#19 16.79 event.c: In function 'signal_handler':
-#19 16.79 event.c:236:9: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 16.79   236 |         write(pipefd[1], &num, 1);
-#19 16.79       |         ^~~~~~~~~~~~~~~~~~~~~~~~~
-#19 16.89   CC       fd_device.o
-#19 17.10   CC       graph.o
-#19 17.34   CC       logger.o
-#19 17.48 logger.c: In function 'real_logger':
-#19 17.48 logger.c:93:25: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 17.48    93 |                         write(umbilical, message, strlen(message));
-#19 17.48       |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#19 17.48 logger.c:94:25: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 17.48    94 |                         write(umbilical, "\n", 1);
-#19 17.48       |                         ^~~~~~~~~~~~~~~~~~~~~~~~~
-#19 17.53   CC       meta.o
-#19 17.75   CC       multicast_device.o
-#19 17.93   CC       net.o
-#19 18.16   CC       net_packet.o
-#19 18.68   CC       net_setup.o
-#19 19.09   CC       net_socket.o
-#19 19.43   CC       netutl.o
-#19 19.63   CC       node.o
-#19 19.83   CC       process.o
-#19 19.98   CC       protocol.o
-#19 20.17   CC       protocol_auth.o
-#19 20.32 protocol_auth.c: In function 'receive_invitation_sptps':
-#19 20.32 protocol_auth.c:296:9: warning: ignoring return value of 'fgets' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 20.32   296 |         fgets(buf, sizeof(buf), f);
-#19 20.32       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~
-#19 20.57   CC       protocol_edge.o
-#19 20.76   CC       protocol_key.o
-#19 21.01   CC       protocol_misc.o
-#19 21.21   CC       protocol_subnet.o
-#19 21.39   CC       raw_socket_device.o
-#19 21.56   CC       route.o
-#19 22.01   CC       script.o
-#19 22.12 script.c: In function 'environment_add':
-#19 22.12 script.c:83:17: warning: ignoring return value of 'vasprintf' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 22.12    83 |                 vasprintf(&env->entries[env->n], format, ap);
-#19 22.12       |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#19 22.12 script.c: In function 'environment_update':
-#19 22.12 script.c:96:9: warning: ignoring return value of 'vasprintf' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 22.12    96 |         vasprintf(&env->entries[pos], format, ap);
-#19 22.12       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#19 22.19   CC       subnet.o
-#19 22.38   CC       subnet_parse.o
-#19 22.63   CC       tincd.o
-#19 22.76 tincd.c: In function 'main':
-#19 22.76 tincd.c:396:9: warning: ignoring return value of 'chdir' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 22.76   396 |         chdir(confbase);
-#19 22.76       |         ^~~~~~~~~~~~~~~
-#19 22.76 tincd.c:551:17: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 22.76   551 |                 write(umbilical, "", 1);
-#19 22.76       |                 ^~~~~~~~~~~~~~~~~~~~~~~
-#19 22.84   GEN      version_git.h
-#19 22.84   CC       version.o
-#19 22.86   CC       quic/quic.o
-#19 22.93 quic/quic.c:47:21: warning: 'DEFAULT_ALPN_LEN' defined but not used [-Wunused-const-variable=]
-#19 22.93    47 | static const size_t DEFAULT_ALPN_LEN = sizeof(DEFAULT_ALPN) - 1;
-#19 22.93       |                     ^~~~~~~~~~~~~~~~
-#19 23.07   CC       quic/quic_transport.o
-#19 23.52   CC       quic/quic_reality.o
-#19 23.69 quic/quic_reality.c: In function 'quic_reality_proxy_data':
-#19 23.69 quic/quic_reality.c:368:23: warning: 'buf' may be used uninitialized [-Wmaybe-uninitialized]
-#19 23.69   368 |         ssize_t len = quic_conn_recv(client_conn, buf, sizeof(buf));
-#19 23.69       |                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#19 23.69 In file included from quic/quic_reality.h:24,
-#19 23.69                  from quic/quic_reality.c:31:
-#19 23.69 quic/quic.h:150:16: note: by argument 2 of type 'const uint8_t *' {aka 'const unsigned char *'} to 'quic_conn_recv' declared here
-#19 23.69   150 | extern ssize_t quic_conn_recv(quic_conn_t *qconn, const uint8_t *buf, size_t len);
-#19 23.69       |                ^~~~~~~~~~~~~~
-#19 23.69 quic/quic_reality.c:367:17: note: 'buf' declared here
-#19 23.69   367 |         uint8_t buf[4096];
-#19 23.69       |                 ^~~
-#19 23.71   CC       quic/quic_fingerprint.o
-#19 23.82   CC       linux/device.o
-#19 24.01   CCLD     tincd
-#19 24.14   CC       ifconfig.o
-#19 24.32   CC       info.o
-#19 24.54   CC       invitation.o
-#19 25.00   CC       tincctl.o
-#19 25.17 tincctl.c: In function 'ask_and_open':
-#19 25.17 tincctl.c:392:17: warning: ignoring return value of 'getcwd' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 25.17   392 |                 getcwd(directory, sizeof(directory));
-#19 25.17       |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#19 25.18 tincctl.c: In function 'cmd_start':
-#19 25.18 tincctl.c:1076:17: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
-#19 25.18  1076 |                 write(2, buf, len);
-#19 25.18       |                 ^~~~~~~~~~~~~~~~~~
-#19 26.06   CC       top.o
-#19 26.30   CCLD     tinc
-#19 26.39 make[2]: Leaving directory '/build/src'
-#19 26.39 Making all in doc
-#19 26.39 make[2]: Entering directory '/build/doc'
-#19 26.39 make[2]: Nothing to be done for 'all'.
-#19 26.39 make[2]: Leaving directory '/build/doc'
-#19 26.39 Making all in test
-#19 26.40 make[2]: Entering directory '/build/test'
-#19 26.40 make[2]: Nothing to be done for 'all'.
-#19 26.40 make[2]: Leaving directory '/build/test'
-#19 26.40 Making all in systemd
-#19 26.40 make[2]: Entering directory '/build/systemd'
-#19 26.40 make[2]: Nothing to be done for 'all'.
-#19 26.40 make[2]: Leaving directory '/build/systemd'
-#19 26.40 Making all in bash_completion.d
-#19 26.40 make[2]: Entering directory '/build/bash_completion.d'
-#19 26.40 make[2]: Nothing to be done for 'all'.
-#19 26.40 make[2]: Leaving directory '/build/bash_completion.d'
-#19 26.40 make[2]: Entering directory '/build'
-#19 26.41 make[2]: Leaving directory '/build'
-#19 26.41 make[1]: Leaving directory '/build'
-#19 26.41 Making install in src
-#19 26.46 make[1]: Entering directory '/build/src'
-#19 26.46   GEN      version_git.h
-#19 26.46   CC       version.o
-#19 26.49   CCLD     tincd
-#19 26.61   CCLD     tinc
-#19 26.74 make[2]: Entering directory '/build/src'
-#19 26.74   GEN      version_git.h
-#19 26.75   CC       version.o
-#19 26.77   CCLD     tincd
-#19 26.88   CCLD     tinc
-#19 26.96  /usr/bin/mkdir -p '/usr/sbin'
-#19 26.96   /usr/bin/install -c tincd tinc '/usr/sbin'
-#19 26.96 make[2]: Nothing to be done for 'install-data-am'.
-#19 26.96 make[2]: Leaving directory '/build/src'
-#19 26.96 make[1]: Leaving directory '/build/src'
-#19 26.96 Making install in doc
-#19 26.97 make[1]: Entering directory '/build/doc'
-#19 26.97 make[2]: Entering directory '/build/doc'
-#19 26.97 make[2]: Nothing to be done for 'install-exec-am'.
-#19 26.97  /usr/bin/mkdir -p '/usr/share/info'
-#19 26.98  /usr/bin/install -c -m 644 ./tinc.info '/usr/share/info'
-#19 26.99  /usr/bin/mkdir -p '/usr/share/man/man5'
-#19 26.99  /usr/bin/install -c -m 644 tinc.conf.5 '/usr/share/man/man5'
-#19 27.00  /usr/bin/mkdir -p '/usr/share/man/man8'
-#19 27.00  /usr/bin/install -c -m 644 tincd.8 tinc.8 tinc-gui.8 '/usr/share/man/man8'
-#19 27.01 make[2]: Leaving directory '/build/doc'
-#19 27.01 make[1]: Leaving directory '/build/doc'
-#19 27.01 Making install in test
-#19 27.01 make[1]: Entering directory '/build/test'
-#19 27.01 make[2]: Entering directory '/build/test'
-#19 27.01 make[2]: Nothing to be done for 'install-exec-am'.
-#19 27.01 make[2]: Nothing to be done for 'install-data-am'.
-#19 27.01 make[2]: Leaving directory '/build/test'
-#19 27.01 make[1]: Leaving directory '/build/test'
-#19 27.01 Making install in systemd
-#19 27.02 make[1]: Entering directory '/build/systemd'
-#19 27.02 make[2]: Entering directory '/build/systemd'
-#19 27.02 make[2]: Nothing to be done for 'install-exec-am'.
-#19 27.02 make[2]: Leaving directory '/build/systemd'
-#19 27.02 make[1]: Leaving directory '/build/systemd'
-#19 27.02 Making install in bash_completion.d
-#19 27.02 make[1]: Entering directory '/build/bash_completion.d'
-#19 27.03 make[2]: Entering directory '/build/bash_completion.d'
-#19 27.03 make[2]: Nothing to be done for 'install-exec-am'.
-#19 27.03  /usr/bin/mkdir -p '/usr/share/bash-completion/completions/'
-#19 27.03  /usr/bin/install -c -m 644 tinc '/usr/share/bash-completion/completions/'
-#19 27.03 make[2]: Leaving directory '/build/bash_completion.d'
-#19 27.03 make[1]: Leaving directory '/build/bash_completion.d'
-#19 27.04 make[1]: Entering directory '/build'
-#19 27.04 make[2]: Entering directory '/build'
-#19 27.04 make[2]: Nothing to be done for 'install-exec-am'.
-#19 27.04 make[2]: Nothing to be done for 'install-data-am'.
-#19 27.04 make[2]: Leaving directory '/build'
-#19 27.04 make[1]: Leaving directory '/build'
-#19 DONE 27.1s
+#19 2.599 sh: 1: git: not found
+#19 3.358 sh: 1: git: not found
+#19 3.629 sh: 1: git: not found
+#19 3.790 configure.ac:17: warning: The macro `AC_PROG_CC_STDC' is obsolete.
+#19 3.790 configure.ac:17: You should run autoupdate.
+#19 3.790 ./lib/autoconf/c.m4:1666: AC_PROG_CC_STDC is expanded from...
+#19 3.790 configure.ac:17: the top level
+#19 4.039 sh: 1: git: not found
+#19 4.821 configure: WARNING: unrecognized options: --enable-maintainer-mode
+#19 4.865 checking for a BSD-compatible install... /usr/bin/install -c
+#19 4.879 checking whether build environment is sane... yes
+#19 4.896 checking for a race-free mkdir -p... /usr/bin/mkdir -p
+#19 4.899 checking for gawk... no
+#19 4.899 checking for mawk... mawk
+#19 4.899 checking whether make sets $(MAKE)... yes
+#19 4.916 checking whether make supports nested variables... yes
+#19 4.925 checking whether make supports nested variables... (cached) yes
+#19 4.925 checking whether make supports the include directive... yes (GNU style)
+#19 4.934 checking for gcc... gcc
+#19 4.974 checking whether the C compiler works... yes
+#19 5.058 checking for C compiler default output file name... a.out
+#19 5.059 checking for suffix of executables... 
+#19 5.094 checking whether we are cross compiling... no
+#19 5.141 checking for suffix of object files... o
+#19 5.163 checking whether the compiler supports GNU C... yes
+#19 5.180 checking whether gcc accepts -g... yes
+#19 5.202 checking for gcc option to enable C11 features... none needed
+#19 5.279 checking whether gcc understands -c and -o together... yes
+#19 5.312 checking dependency style of gcc... gcc3
+#19 5.351 checking for stdio.h... yes
+#19 5.369 checking for stdlib.h... yes
+#19 5.400 checking for string.h... yes
+#19 5.436 checking for inttypes.h... yes
+#19 5.465 checking for stdint.h... yes
+#19 5.497 checking for strings.h... yes
+#19 5.520 checking for sys/stat.h... yes
+#19 5.544 checking for sys/types.h... yes
+#19 5.571 checking for unistd.h... yes
+#19 5.600 checking for wchar.h... yes
+#19 5.637 checking for minix/config.h... no
+#19 5.674 checking whether it is safe to define __EXTENSIONS__... yes
+#19 5.711 checking whether _XOPEN_SOURCE should be defined... no
+#19 5.740 checking for gcc... (cached) gcc
+#19 5.771 checking whether the compiler supports GNU C... (cached) yes
+#19 5.771 checking whether gcc accepts -g... (cached) yes
+#19 5.771 checking for gcc option to enable C11 features... (cached) none needed
+#19 5.771 checking whether gcc understands -c and -o together... (cached) yes
+#19 5.771 checking dependency style of gcc... (cached) gcc3
+#19 5.771 checking how to run the C preprocessor... gcc -E
+#19 5.826 checking for a sed that does not truncate output... /usr/bin/sed
+#19 5.832 checking whether to build with code coverage support... no
+#19 5.837 checking build system type... x86_64-pc-linux-gnu
+#19 5.893 checking host system type... x86_64-pc-linux-gnu
+#19 5.909 checking CFLAGS for maximum warnings... -Wall
+#19 5.947 checking whether C compiler accepts -DFORTIFY_SOURCE=2... yes
+#19 5.967 checking whether C compiler accepts -fwrapv... yes
+#19 5.986 checking whether C compiler accepts -fPIE... yes
+#19 6.006 checking whether the linker accepts -pie... yes
+#19 6.043 checking whether the linker accepts -Wl,-z,relro... yes
+#19 6.084 checking whether the linker accepts -Wl,-z,now... yes
+#19 6.125 checking for syslog.h... yes
+#19 6.165 checking for sys/file.h... yes
+#19 6.205 checking for sys/ioctl.h... yes
+#19 6.249 checking for sys/mman.h... yes
+#19 6.284 checking for sys/param.h... yes
+#19 6.336 checking for sys/resource.h... yes
+#19 6.368 checking for sys/socket.h... yes
+#19 6.409 checking for sys/time.h... yes
+#19 6.445 checking for sys/un.h... yes
+#19 6.483 checking for sys/wait.h... yes
+#19 6.523 checking for netdb.h... yes
+#19 6.566 checking for arpa/inet.h... yes
+#19 6.610 checking for dirent.h... yes
+#19 6.644 checking for getopt.h... yes
+#19 6.682 checking for stddef.h... yes
+#19 6.720 checking for net/if.h... yes
+#19 6.815 checking for net/if_types.h... no
+#19 6.884 checking for net/ethernet.h... yes
+#19 6.954 checking for net/if_arp.h... yes
+#19 7.022 checking for netinet/in_systm.h... yes
+#19 7.107 checking for netinet/in.h... yes
+#19 7.171 checking for netinet/in6.h... no
+#19 7.244 checking for netpacket/packet.h... yes
+#19 7.313 checking for netinet/if_ether.h... yes
+#19 7.383 checking for netinet/ip.h... yes
+#19 7.459 checking for netinet/ip6.h... yes
+#19 7.528 checking for resolv.h... yes
+#19 7.604 checking for netinet/tcp.h... yes
+#19 7.679 checking for netinet/ip_icmp.h... yes
+#19 7.752 checking for netinet/icmp6.h... yes
+#19 7.843 checking for working __malloc__ attribute... yes
+#19 7.862 checking for working __nonnull__ attribute... yes
+#19 7.883 checking for working __warn_unused_result__ attribute... yes
+#19 7.903 checking for struct ether_header... yes
+#19 8.047 checking for struct arphdr... yes
+#19 8.213 checking for struct ether_arp... yes
+#19 8.361 checking for struct ip... yes
+#19 8.509 checking for struct icmp... yes
+#19 8.665 checking for struct ip6_hdr... yes
+#19 8.815 checking for struct icmp6_hdr... yes
+#19 8.975 checking for struct nd_neighbor_solicit... yes
+#19 9.126 checking for struct nd_opt_hdr... yes
+#19 9.277 checking for asprintf... yes
+#19 9.318 checking for daemon... yes
+#19 9.355 checking for fchmod... yes
+#19 9.394 checking for flock... yes
+#19 9.433 checking for fork... yes
+#19 9.476 checking for gettimeofday... yes
+#19 9.511 checking for mlockall... yes
+#19 9.556 checking for putenv... yes
+#19 9.595 checking for recvmmsg... yes
+#19 9.633 checking for strsignal... yes
+#19 9.670 checking for nanosleep... yes
+#19 9.705 checking for unsetenv... yes
+#19 9.743 checking for vsyslog... yes
+#19 9.781 checking for devname... no
+#19 9.833 checking for fdevname... no
+#19 9.879 checking for getopt_long... yes
+#19 9.920 checking for gcc options needed to detect all undeclared functions... none needed
+#19 9.960 checking whether res_init is declared... yes
+#19 10.00 checking for res_init in -lresolv... no
+#19 10.05 checking for linux/if_tun.h... yes
+#19 10.14 checking for curses.h... yes
+#19 10.18 checking for initscr in -lncurses... yes
+#19 10.22 checking for wtimeout in -ltinfo... yes
+#19 10.26 checking for readline/readline.h... yes
+#19 10.31 checking for readline/history.h... yes
+#19 10.35 checking for readline in -lreadline... yes
+#19 10.39 checking for zlib.h... yes
+#19 10.43 checking for compress2 in -lz... yes
+#19 10.47 checking for lzo1x_1_compress in -llzo2... yes
+#19 10.51 checking for lzo/lzo1x.h... yes
+#19 10.55 checking for dlopen... yes
+#19 10.59 checking for openssl/evp.h... yes
+#19 10.67 checking for openssl/rsa.h... yes
+#19 10.73 checking for openssl/rand.h... yes
+#19 10.80 checking for openssl/err.h... yes
+#19 10.86 checking for openssl/sha.h... yes
+#19 10.91 checking for openssl/pem.h... yes
+#19 11.01 checking for openssl/engine.h... yes
+#19 11.11 checking for EVP_EncryptInit_ex in -lcrypto... yes
+#19 11.18 checking for SSL_new in -lssl... yes
+#19 11.25 checking for RAND_bytes... yes
+#19 11.34 checking for EVP_EncryptInit_ex... yes
+#19 11.43 checking for EVP_CIPHER_CTX_new... yes
+#19 11.51 checking whether OpenSSL_add_all_algorithms is declared... yes
+#19 11.58 checking whether EVP_aes_256_cfb is declared... yes
+#19 11.64 checking for BN_GENCB_new... yes
+#19 11.72 checking for ERR_remove_state... yes
+#19 11.79 checking for RSA_set0_key... yes
+#19 11.87 checking for HMAC_CTX_new... yes
+#19 11.96 checking that generated files are newer than configure... done
+#19 11.96 configure: creating ./config.status
+#19 12.06 config.status: creating Makefile
+#19 12.08 config.status: creating src/Makefile
+#19 12.09 config.status: creating doc/Makefile
+#19 12.11 config.status: creating test/Makefile
+#19 12.13 config.status: creating test/testlib.sh
+#19 12.15 config.status: creating systemd/Makefile
+#19 12.17 config.status: creating bash_completion.d/Makefile
+#19 12.19 config.status: creating config.h
+#19 12.19 config.status: config.h is unchanged
+#19 12.20 config.status: executing depfiles commands
+#19 12.25 configure: WARNING: unrecognized options: --enable-maintainer-mode
+#19 12.28 make  all-recursive
+#19 12.29 make[1]: Entering directory '/build'
+#19 12.29 Making all in src
+#19 12.34 make[2]: Entering directory '/build/src'
+#19 12.34   CC       address_cache.o
+#19 12.57   CC       autoconnect.o
+#19 12.77   CC       conf.o
+#19 13.05   CC       connection.o
+#19 13.24   CC       control.o
+#19 13.44   CC       dummy_device.o
+#19 13.57   CC       edge.o
+#19 13.72   CC       event.o
+#19 13.82 event.c: In function 'signal_handler':
+#19 13.82 event.c:236:9: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 13.82   236 |         write(pipefd[1], &num, 1);
+#19 13.82       |         ^~~~~~~~~~~~~~~~~~~~~~~~~
+#19 13.90   CC       fd_device.o
+#19 14.06   CC       graph.o
+#19 14.25   CC       logger.o
+#19 14.36 logger.c: In function 'real_logger':
+#19 14.36 logger.c:93:25: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 14.36    93 |                         write(umbilical, message, strlen(message));
+#19 14.36       |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#19 14.36 logger.c:94:25: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 14.36    94 |                         write(umbilical, "\n", 1);
+#19 14.36       |                         ^~~~~~~~~~~~~~~~~~~~~~~~~
+#19 14.41   CC       meta.o
+#19 14.59   CC       multicast_device.o
+#19 14.74   CC       net.o
+#19 14.95   CC       net_packet.o
+#19 15.41   CC       net_setup.o
+#19 15.76   CC       net_socket.o
+#19 16.06   CC       netutl.o
+#19 16.24   CC       node.o
+#19 16.41   CC       process.o
+#19 16.54   CC       protocol.o
+#19 16.70   CC       protocol_auth.o
+#19 16.81 protocol_auth.c: In function 'receive_invitation_sptps':
+#19 16.81 protocol_auth.c:296:9: warning: ignoring return value of 'fgets' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 16.81   296 |         fgets(buf, sizeof(buf), f);
+#19 16.81       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~
+#19 17.01   CC       protocol_edge.o
+#19 17.18   CC       protocol_key.o
+#19 17.39   CC       protocol_misc.o
+#19 17.56   CC       protocol_subnet.o
+#19 17.70   CC       raw_socket_device.o
+#19 17.84   CC       route.o
+#19 18.20   CC       script.o
+#19 18.30 script.c: In function 'environment_add':
+#19 18.30 script.c:83:17: warning: ignoring return value of 'vasprintf' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 18.30    83 |                 vasprintf(&env->entries[env->n], format, ap);
+#19 18.30       |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#19 18.31 script.c: In function 'environment_update':
+#19 18.31 script.c:96:9: warning: ignoring return value of 'vasprintf' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 18.31    96 |         vasprintf(&env->entries[pos], format, ap);
+#19 18.31       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#19 18.35   CC       subnet.o
+#19 18.53   CC       subnet_parse.o
+#19 18.73   CC       tincd.o
+#19 18.83 tincd.c: In function 'main':
+#19 18.83 tincd.c:396:9: warning: ignoring return value of 'chdir' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 18.83   396 |         chdir(confbase);
+#19 18.83       |         ^~~~~~~~~~~~~~~
+#19 18.83 tincd.c:551:17: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 18.83   551 |                 write(umbilical, "", 1);
+#19 18.83       |                 ^~~~~~~~~~~~~~~~~~~~~~~
+#19 18.90   GEN      version_git.h
+#19 18.90   CC       version.o
+#19 18.92   CC       quic/quic.o
+#19 18.98 quic/quic.c:47:21: warning: 'DEFAULT_ALPN_LEN' defined but not used [-Wunused-const-variable=]
+#19 18.98    47 | static const size_t DEFAULT_ALPN_LEN = sizeof(DEFAULT_ALPN) - 1;
+#19 18.98       |                     ^~~~~~~~~~~~~~~~
+#19 19.11   CC       quic/quic_transport.o
+#19 19.47   CC       quic/quic_reality.o
+#19 19.62 quic/quic_reality.c: In function 'quic_reality_proxy_data':
+#19 19.62 quic/quic_reality.c:368:23: warning: 'buf' may be used uninitialized [-Wmaybe-uninitialized]
+#19 19.62   368 |         ssize_t len = quic_conn_recv(client_conn, buf, sizeof(buf));
+#19 19.62       |                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#19 19.62 In file included from quic/quic_reality.h:24,
+#19 19.62                  from quic/quic_reality.c:31:
+#19 19.62 quic/quic.h:150:16: note: by argument 2 of type 'const uint8_t *' {aka 'const unsigned char *'} to 'quic_conn_recv' declared here
+#19 19.62   150 | extern ssize_t quic_conn_recv(quic_conn_t *qconn, const uint8_t *buf, size_t len);
+#19 19.62       |                ^~~~~~~~~~~~~~
+#19 19.62 quic/quic_reality.c:367:17: note: 'buf' declared here
+#19 19.62   367 |         uint8_t buf[4096];
+#19 19.62       |                 ^~~
+#19 19.64   CC       quic/quic_fingerprint.o
+#19 19.73   CC       linux/device.o
+#19 19.88   CCLD     tincd
+#19 19.97   CC       ifconfig.o
+#19 20.11   CC       info.o
+#19 20.30   CC       invitation.o
+#19 20.70   CC       tincctl.o
+#19 20.83 tincctl.c: In function 'ask_and_open':
+#19 20.83 tincctl.c:392:17: warning: ignoring return value of 'getcwd' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 20.83   392 |                 getcwd(directory, sizeof(directory));
+#19 20.83       |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#19 20.83 tincctl.c: In function 'cmd_start':
+#19 20.83 tincctl.c:1076:17: warning: ignoring return value of 'write' declared with attribute 'warn_unused_result' [-Wunused-result]
+#19 20.83  1076 |                 write(2, buf, len);
+#19 20.83       |                 ^~~~~~~~~~~~~~~~~~
+#19 21.51   CC       top.o
+#19 21.70   CCLD     tinc
+#19 21.78 make[2]: Leaving directory '/build/src'
+#19 21.78 Making all in doc
+#19 21.78 make[2]: Entering directory '/build/doc'
+#19 21.78 make[2]: Nothing to be done for 'all'.
+#19 21.78 make[2]: Leaving directory '/build/doc'
+#19 21.78 Making all in test
+#19 21.79 make[2]: Entering directory '/build/test'
+#19 21.79 make[2]: Nothing to be done for 'all'.
+#19 21.79 make[2]: Leaving directory '/build/test'
+#19 21.79 Making all in systemd
+#19 21.79 make[2]: Entering directory '/build/systemd'
+#19 21.79 make[2]: Nothing to be done for 'all'.
+#19 21.79 make[2]: Leaving directory '/build/systemd'
+#19 21.79 Making all in bash_completion.d
+#19 21.79 make[2]: Entering directory '/build/bash_completion.d'
+#19 21.79 make[2]: Nothing to be done for 'all'.
+#19 21.79 make[2]: Leaving directory '/build/bash_completion.d'
+#19 21.79 make[2]: Entering directory '/build'
+#19 21.80 make[2]: Leaving directory '/build'
+#19 21.80 make[1]: Leaving directory '/build'
+#19 21.80 Making install in src
+#19 21.84 make[1]: Entering directory '/build/src'
+#19 21.84   GEN      version_git.h
+#19 21.85   CC       version.o
+#19 21.87   CCLD     tincd
+#19 21.99   CCLD     tinc
+#19 22.13 make[2]: Entering directory '/build/src'
+#19 22.13   GEN      version_git.h
+#19 22.13   CC       version.o
+#19 22.16   CCLD     tincd
+#19 22.27   CCLD     tinc
+#19 22.37  /usr/bin/mkdir -p '/usr/sbin'
+#19 22.37   /usr/bin/install -c tincd tinc '/usr/sbin'
+#19 22.38 make[2]: Nothing to be done for 'install-data-am'.
+#19 22.38 make[2]: Leaving directory '/build/src'
+#19 22.38 make[1]: Leaving directory '/build/src'
+#19 22.38 Making install in doc
+#19 22.38 make[1]: Entering directory '/build/doc'
+#19 22.38 make[2]: Entering directory '/build/doc'
+#19 22.38 make[2]: Nothing to be done for 'install-exec-am'.
+#19 22.39  /usr/bin/mkdir -p '/usr/share/info'
+#19 22.39  /usr/bin/install -c -m 644 ./tinc.info '/usr/share/info'
+#19 22.40  /usr/bin/mkdir -p '/usr/share/man/man5'
+#19 22.41  /usr/bin/install -c -m 644 tinc.conf.5 '/usr/share/man/man5'
+#19 22.41  /usr/bin/mkdir -p '/usr/share/man/man8'
+#19 22.42  /usr/bin/install -c -m 644 tincd.8 tinc.8 tinc-gui.8 '/usr/share/man/man8'
+#19 22.42 make[2]: Leaving directory '/build/doc'
+#19 22.42 make[1]: Leaving directory '/build/doc'
+#19 22.42 Making install in test
+#19 22.42 make[1]: Entering directory '/build/test'
+#19 22.43 make[2]: Entering directory '/build/test'
+#19 22.43 make[2]: Nothing to be done for 'install-exec-am'.
+#19 22.43 make[2]: Nothing to be done for 'install-data-am'.
+#19 22.43 make[2]: Leaving directory '/build/test'
+#19 22.43 make[1]: Leaving directory '/build/test'
+#19 22.43 Making install in systemd
+#19 22.43 make[1]: Entering directory '/build/systemd'
+#19 22.43 make[2]: Entering directory '/build/systemd'
+#19 22.43 make[2]: Nothing to be done for 'install-exec-am'.
+#19 22.43 make[2]: Leaving directory '/build/systemd'
+#19 22.43 make[1]: Leaving directory '/build/systemd'
+#19 22.44 Making install in bash_completion.d
+#19 22.44 make[1]: Entering directory '/build/bash_completion.d'
+#19 22.44 make[2]: Entering directory '/build/bash_completion.d'
+#19 22.44 make[2]: Nothing to be done for 'install-exec-am'.
+#19 22.44  /usr/bin/mkdir -p '/usr/share/bash-completion/completions/'
+#19 22.44  /usr/bin/install -c -m 644 tinc '/usr/share/bash-completion/completions/'
+#19 22.45 make[2]: Leaving directory '/build/bash_completion.d'
+#19 22.45 make[1]: Leaving directory '/build/bash_completion.d'
+#19 22.45 make[1]: Entering directory '/build'
+#19 22.45 make[2]: Entering directory '/build'
+#19 22.45 make[2]: Nothing to be done for 'install-exec-am'.
+#19 22.45 make[2]: Nothing to be done for 'install-data-am'.
+#19 22.45 make[2]: Leaving directory '/build'
+#19 22.45 make[1]: Leaving directory '/build'
+#19 DONE 22.5s
 
 #20 [node1 runtime 2/9] RUN apt-get update && apt-get install -y     libssl3     zlib1g     liblzo2-2     libncurses6     libreadline8     net-tools     iproute2     iputils-ping     && rm -rf /var/lib/apt/lists/*
 #20 CACHED
@@ -419,28 +419,29 @@ Just set COMPOSE_BAKE=true
 #21 CACHED
 
 #22 [node1 runtime 4/9] COPY --from=tinc-builder /usr/sbin/tincd /usr/sbin/
-#22 DONE 0.0s
+#22 DONE 0.1s
 
 #23 [node1 runtime 5/9] COPY --from=tinc-builder /usr/sbin/tinc /usr/sbin/
-#23 DONE 0.0s
+#23 DONE 0.1s
 
 #24 [node1 runtime 6/9] RUN ldconfig
-#24 DONE 0.6s
+#24 DONE 0.5s
 
 #25 [node1 runtime 7/9] RUN mkdir -p /etc/tinc /var/run /var/log
-#25 DONE 0.4s
+#25 DONE 0.5s
 
 #26 [node1 runtime 8/9] COPY docker/scripts/entrypoint.sh /entrypoint.sh
 #26 DONE 0.1s
 
 #27 [node1 runtime 9/9] RUN chmod +x /entrypoint.sh
-#27 DONE 0.3s
+#27 DONE 0.6s
 
 #28 [node1] exporting to image
-#28 exporting layers 0.1s done
-#28 writing image sha256:979b82d297bbf62d4cdf500b08a6a23379ca7e639633b2c92da000f2ee228f67 done
-#28 naming to docker.io/library/tinc-vless:latest done
-#28 DONE 0.1s
+#28 exporting layers
+#28 exporting layers 0.3s done
+#28 writing image sha256:fbc367cd8d09e3fad12bda321a81e40c827b44b0e00ba7cbd5d516dc6dd04bce done
+#28 naming to docker.io/library/tinc-vless:latest 0.0s done
+#28 DONE 0.3s
 
 #29 [node1] resolving provenance for metadata file
 #29 DONE 0.0s
@@ -449,9 +450,9 @@ Just set COMPOSE_BAKE=true
 
 === Container status ===
 CONTAINER ID   IMAGE               COMMAND                  CREATED         STATUS                  PORTS                                       NAMES
-e8d4b129cb66   tinc-vless:latest   "/entrypoint.sh tinc…"   1 second ago    Up Less than a second   0.0.0.0:6553->443/tcp, [::]:6553->443/tcp   tinc-node3
-6fc7134f7905   tinc-vless:latest   "/entrypoint.sh tinc…"   1 second ago    Up Less than a second   0.0.0.0:6552->443/tcp, [::]:6552->443/tcp   tinc-node2
-a1fdea5475cf   tinc-vless:latest   "/entrypoint.sh tinc…"   2 seconds ago   Up Less than a second   0.0.0.0:6551->443/tcp, [::]:6551->443/tcp   tinc-node1
+96315ffa9b44   tinc-vless:latest   "/entrypoint.sh tinc…"   1 second ago    Up Less than a second   0.0.0.0:6553->443/tcp, [::]:6553->443/tcp   tinc-node3
+a087cb147b7f   tinc-vless:latest   "/entrypoint.sh tinc…"   1 second ago    Up Less than a second   0.0.0.0:6552->443/tcp, [::]:6552->443/tcp   tinc-node2
+02a48ac86cd1   tinc-vless:latest   "/entrypoint.sh tinc…"   2 seconds ago   Up 1 second             0.0.0.0:6551->443/tcp, [::]:6551->443/tcp   tinc-node1
 
 === Waiting 3 seconds for containers to initialize ===
 
@@ -464,7 +465,7 @@ NETWORK INFORMATION
     link/none 
     inet 10.0.0.1/24 scope global tinc0
        valid_lft forever preferred_lft forever
-    inet6 fe80::2db4:78c4:954d:3359/64 scope link stable-privacy 
+    inet6 fe80::5f8f:e209:25a0:7004/64 scope link stable-privacy 
        valid_lft forever preferred_lft forever
 default via 172.25.1.1 dev eth0 
 10.0.0.0/24 dev tinc0 proto kernel scope link src 10.0.0.1 
@@ -476,7 +477,7 @@ default via 172.25.1.1 dev eth0
     link/none 
     inet 10.0.0.2/24 scope global tinc0
        valid_lft forever preferred_lft forever
-    inet6 fe80::8ba0:5488:ffbd:fbed/64 scope link stable-privacy 
+    inet6 fe80::a206:d626:2955:a990/64 scope link stable-privacy 
        valid_lft forever preferred_lft forever
 default via 172.25.1.1 dev eth0 
 10.0.0.0/24 dev tinc0 proto kernel scope link src 10.0.0.2 
@@ -487,7 +488,7 @@ default via 172.25.1.1 dev eth0
     link/none 
     inet 10.0.0.3/24 scope global tinc0
        valid_lft forever preferred_lft forever
-    inet6 fe80::f64b:f4a0:153f:83f4/64 scope link stable-privacy 
+    inet6 fe80::a8ae:9332:7368:284b/64 scope link stable-privacy 
        valid_lft forever preferred_lft forever
 default via 172.25.2.1 dev eth0 
 10.0.0.0/24 dev tinc0 proto kernel scope link src 10.0.0.3 
@@ -503,7 +504,7 @@ From 10.0.0.2 icmp_seq=1 Destination Net Unknown
 From 10.0.0.2 icmp_seq=2 Destination Net Unknown
 
 --- 10.0.0.2 ping statistics ---
-2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1074ms
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1011ms
 
 FAILED
 
@@ -513,7 +514,7 @@ From 10.0.0.3 icmp_seq=1 Destination Net Unknown
 From 10.0.0.3 icmp_seq=2 Destination Net Unknown
 
 --- 10.0.0.3 ping statistics ---
-2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1066ms
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1030ms
 
 FAILED
 
@@ -523,7 +524,7 @@ From 10.0.0.1 icmp_seq=1 Destination Net Unknown
 From 10.0.0.1 icmp_seq=2 Destination Net Unknown
 
 --- 10.0.0.1 ping statistics ---
-2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1066ms
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1001ms
 
 FAILED
 
@@ -533,7 +534,7 @@ From 10.0.0.3 icmp_seq=1 Destination Net Unknown
 From 10.0.0.3 icmp_seq=2 Destination Net Unknown
 
 --- 10.0.0.3 ping statistics ---
-2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1066ms
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1007ms
 
 FAILED
 
@@ -543,7 +544,7 @@ From 10.0.0.1 icmp_seq=1 Destination Net Unknown
 From 10.0.0.1 icmp_seq=2 Destination Net Unknown
 
 --- 10.0.0.1 ping statistics ---
-2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1070ms
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1024ms
 
 FAILED
 
@@ -553,7 +554,7 @@ From 10.0.0.2 icmp_seq=1 Destination Net Unknown
 From 10.0.0.2 icmp_seq=2 Destination Net Unknown
 
 --- 10.0.0.2 ping statistics ---
-2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1005ms
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1031ms
 
 FAILED
 
@@ -600,15 +601,15 @@ DETAILED LOGS (QUIC HANDSHAKE FOCUS)
 
 === NODE1 LOGS ===
 --- QUIC Initialization ---
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] handshake complete, ALPN='h3'
-quiche: quiche: e480573aef4954f1f8335c05d132c779 tx pkt Handshake version=1 dcid=fa66966b5e517622441958ba032a5fef scid=e480573aef4954f1f8335c05d132c779 len=45 pn=3 
-quiche: quiche: e480573aef4954f1f8335c05d132c779 tx frm ACK delay=57 blocks=[1..2] ecn_counts=None
-quiche: quiche: e480573aef4954f1f8335c05d132c779 tx frm CRYPTO off=0 len=36
-quiche: quiche::recovery::congestion::recovery: e480573aef4954f1f8335c05d132c779 timer=4.106811ms latest_rtt=1.463648ms srtt=1.463648ms min_rtt=1.463648ms rttvar=731.824µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=103 app_limited=true congestion_recovery_start_time=None Rate { delivered: 299, delivered_time: Instant { tv_sec: 755555, tv_nsec: 496923629 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 496923629 }, end_of_app_limited: 2, last_sent_packet: 3, largest_acked: 0, rate_sample: RateSample { bandwidth: 1.63 Mbps, is_app_limited: true, interval: 1.463648ms, delivered: 299, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 495024323 }), send_elapsed: 0ns, ack_elapsed: 1.463648ms, rtt: 1.463648ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 11529411, last_update: Instant { tv_sec: 755555, tv_nsec: 497980629 }, next_time: Instant { tv_sec: 755555, tv_nsec: 496923629 }, max_datagram_size: 1350, last_packet_size: None, iv: 8.934µs, max_pacing
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] send: 103 bytes to 172.25.1.11:443 via fd=6 (first=0xea)
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] sendto OK: 103 bytes
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] sent 1 packets, 103 bytes total
-QUIC state check for node2: established=1, connection=0x61d154ce7bc0, quic_meta=1, quic_stream_id=-1, outgoing=(nil), initiated=0
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] handshake complete, ALPN='h3'
+quiche: quiche: 8afd9692601caa3fe8abcac90decbc36 tx pkt Handshake version=1 dcid=aeac2acc6722a85ec8495bf7bc9c9db5 scid=8afd9692601caa3fe8abcac90decbc36 len=45 pn=3 
+quiche: quiche: 8afd9692601caa3fe8abcac90decbc36 tx frm ACK delay=27 blocks=[1..2] ecn_counts=None
+quiche: quiche: 8afd9692601caa3fe8abcac90decbc36 tx frm CRYPTO off=0 len=36
+quiche: quiche::recovery::congestion::recovery: 8afd9692601caa3fe8abcac90decbc36 timer=4.149305ms latest_rtt=1.398244ms srtt=1.398244ms min_rtt=1.398244ms rttvar=699.122µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=103 app_limited=true congestion_recovery_start_time=None Rate { delivered: 299, delivered_time: Instant { tv_sec: 757749, tv_nsec: 992603802 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 992603802 }, end_of_app_limited: 2, last_sent_packet: 3, largest_acked: 0, rate_sample: RateSample { bandwidth: 1.71 Mbps, is_app_limited: true, interval: 1.398244ms, delivered: 299, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 991024887 }), send_elapsed: 0ns, ack_elapsed: 1.398244ms, rtt: 1.398244ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 12068709, last_update: Instant { tv_sec: 757749, tv_nsec: 993016055 }, next_time: Instant { tv_sec: 757749, tv_nsec: 992603802 }, max_datagram_size: 1350, last_packet_size: None, iv: 8.534µs, max_pacing
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] send: 103 bytes to 172.25.1.11:443 via fd=6 (first=0xe3)
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] sendto OK: 103 bytes
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] sent 1 packets, 103 bytes total
+QUIC state check for node2: established=1, connection=0x5a17700a7bc0, quic_meta=1, quic_stream_id=-1, outgoing=(nil), initiated=0
 QUIC handshake complete for node2, initiating metadata protocol
 Created QUIC meta stream 0 for client
 Created client QUIC meta stream 0 for node2 after handshake
@@ -618,166 +619,161 @@ Found existing QUIC connection for node node2
 QUIC meta: flushing 13 bytes from outbuf via stream 0 (handshake_complete=1)
 Sent 13 bytes on QUIC meta stream 0
 QUIC meta: sent 13 bytes on stream 0, calling quic_conn_send
-quiche: quiche: e480573aef4954f1f8335c05d132c779 tx pkt Short dcid=fa66966b5e517622441958ba032a5fef key_phase=false len=18 pn=4 
-quiche: quiche: e480573aef4954f1f8335c05d132c779 tx frm STREAM id=0 off=0 len=13 fin=false
-quiche: quiche::recovery::congestion::recovery: e480573aef4954f1f8335c05d132c779 timer=3.817129ms latest_rtt=1.463648ms srtt=1.463648ms min_rtt=1.463648ms rttvar=731.824µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=155 app_limited=true congestion_recovery_start_time=None Rate { delivered: 299, delivered_time: Instant { tv_sec: 755555, tv_nsec: 496923629 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 496923629 }, end_of_app_limited: 3, last_sent_packet: 4, largest_acked: 0, rate_sample: RateSample { bandwidth: 1.63 Mbps, is_app_limited: true, interval: 1.463648ms, delivered: 299, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 495024323 }), send_elapsed: 0ns, ack_elapsed: 1.463648ms, rtt: 1.463648ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 52, rate: 11529411, last_update: Instant { tv_sec: 755555, tv_nsec: 497980629 }, next_time: Instant { tv_sec: 755555, tv_nsec: 498546737 }, max_datagram_size: 1350, last_packet_size: Some(52), iv: 0ns, max_pacing
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] send: 52 bytes to 172.25.1.11:443 via fd=6 (first=0x5a)
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] sendto OK: 52 bytes
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] sent 1 packets, 52 bytes total
-QUIC packet processed: qconn->node=0x61d154c48480
-QUIC node found: name=node2, connection=0x61d154ce7bc0
+quiche: quiche: 8afd9692601caa3fe8abcac90decbc36 tx pkt Short dcid=aeac2acc6722a85ec8495bf7bc9c9db5 key_phase=false len=18 pn=4 
+quiche: quiche: 8afd9692601caa3fe8abcac90decbc36 tx frm STREAM id=0 off=0 len=13 fin=false
+quiche: quiche::recovery::congestion::recovery: 8afd9692601caa3fe8abcac90decbc36 timer=4.058331ms latest_rtt=1.398244ms srtt=1.398244ms min_rtt=1.398244ms rttvar=699.122µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=155 app_limited=true congestion_recovery_start_time=None Rate { delivered: 299, delivered_time: Instant { tv_sec: 757749, tv_nsec: 992603802 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 992603802 }, end_of_app_limited: 3, last_sent_packet: 4, largest_acked: 0, rate_sample: RateSample { bandwidth: 1.71 Mbps, is_app_limited: true, interval: 1.398244ms, delivered: 299, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 991024887 }), send_elapsed: 0ns, ack_elapsed: 1.398244ms, rtt: 1.398244ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 52, rate: 12068709, last_update: Instant { tv_sec: 757749, tv_nsec: 993016055 }, next_time: Instant { tv_sec: 757749, tv_nsec: 993152510 }, max_datagram_size: 1350, last_packet_size: Some(52), iv: 0ns, max_pacing
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] send: 52 bytes to 172.25.1.11:443 via fd=6 (first=0x5d)
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] sendto OK: 52 bytes
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] sent 1 packets, 52 bytes total
+QUIC packet processed: qconn->node=0x5a1770008480
+QUIC node found: name=node2, connection=0x5a17700a7bc0
 QUIC checking connection: name=node2, quic_meta=1, quic_stream_id=0, outgoing=(nil)
 Detected QUIC Long Header packet: first_byte=0xe0
 QUIC demux: received UDP len=435 from 172.25.1.11:443
 Parsed QUIC header: type=5 version=0x0 DCID=<empty> (len=0) SCID=<empty> (len=0)
 Received QUIC packet from unknown source: type=5 version=0x0
 Accepted QUIC server connection
-Registered CID=ed7424ddbfeb4002e76273a3f472346c (len=16) for demultiplexing
+Registered CID=57ac580fd0f3c1363ef415e3c983563c (len=16) for demultiplexing
 Registered our SCID (len=16)
 Created QUIC server connection for new client
-QUIC[6564373432346464626665623430303265373632373361336634373233343663] recv failed: -3
+QUIC[3537616335383066643066336331333633656634313565336339383335363363] recv failed: -3
 Failed to process Initial packet: -1
 Freed QUIC connection
-Detected QUIC Short Header packet: first_byte=0x5d
+Detected QUIC Short Header packet: first_byte=0x46
 QUIC demux: received UDP len=39 from 172.25.1.11:443
 Parsed QUIC header: type=5 version=0x0 DCID=<empty> (len=0) SCID=<empty> (len=0)
 Received QUIC packet from unknown source: type=5 version=0x0
 Accepted QUIC server connection
-Registered CID=ef2e8abf39c44dc02997b667401eb529 (len=16) for demultiplexing
+Registered CID=90d96cb3087cce58ac6766ec91aa8b3e (len=16) for demultiplexing
 Registered our SCID (len=16)
 Created QUIC server connection for new client
-QUIC[6566326538616266333963343464633032393937623636373430316562353239] recv failed: -3
+QUIC[3930643936636233303837636365353861633637363665633931616138623365] recv failed: -3
 Failed to process Initial packet: -1
 Freed QUIC connection
-Detected QUIC Short Header packet: first_byte=0x40
+Detected QUIC Short Header packet: first_byte=0x59
 
 --- Errors & Warnings ---
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-QUIC[3565616431643061626166326566313531323933303563303466616139633463] recv failed: -3
+QUIC[3538633563653464646362343231626464663964316239323965383039626333] recv failed: -3
 Failed to process Initial packet: -1
-QUIC[3834336631333664306261383037316237633231666436393932613266613864] recv failed: -3
+QUIC[6132356630643230316637323839353736653634373336336131373865623061] recv failed: -3
 Failed to process Initial packet: -1
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-QUIC[3531303761323966363037346139623739373065353931343638386361326337] recv failed: -3
+QUIC[3465353034353239633135623964363663376532383962613363343437633863] recv failed: -3
 Failed to process Initial packet: -1
-QUIC[3165623463363137323231353030386562613239396538366434393363326564] recv failed: -3
+QUIC[3237373163666365346336663834653566616235313139313761623331393731] recv failed: -3
 Failed to process Initial packet: -1
-QUIC[3462376264613636356136623631396139316435306436653663316638663332] recv failed: -3
+QUIC[6136313733613935303436376161306265333234653434316535303932323432] recv failed: -3
 Failed to process Initial packet: -1
-QUIC[6437363430623263373865633164306665623939633537386130623936393837] recv failed: -3
+QUIC[6232616337396164626165656132626138633037323238373661366633643862] recv failed: -3
 Failed to process Initial packet: -1
-QUIC[6564373432346464626665623430303265373632373361336634373233343663] recv failed: -3
+QUIC[3537616335383066643066336331333633656634313565336339383335363363] recv failed: -3
 Failed to process Initial packet: -1
-QUIC[6566326538616266333963343464633032393937623636373430316562353239] recv failed: -3
+QUIC[3930643936636233303837636365353861633637363665633931616138623365] recv failed: -3
 Failed to process Initial packet: -1
 
 === NODE2 LOGS ===
 --- QUIC Initialization ---
-Parsed QUIC header: type=3 version=0x1 DCID=fa66966b5e517622441958ba032a5fef (len=16) SCID=e480573aef4954f1f8335c05d132c779 (len=16)
-lookup_connection_by_id() called for CID=fa66966b5e517622441958ba032a5fef (len=16)
+QUIC packet processed: qconn->node=(nil)
+QUIC packet has no associated node and no unbound meta found
+Detected QUIC Long Header packet: first_byte=0xc0
+QUIC demux: received UDP len=103 from 172.25.1.10:443
+Parsed QUIC header: type=3 version=0x1 DCID=aeac2acc6722a85ec8495bf7bc9c9db5 (len=16) SCID=8afd9692601caa3fe8abcac90decbc36 (len=16)
+lookup_connection_by_id() called for CID=aeac2acc6722a85ec8495bf7bc9c9db5 (len=16)
 Total registered CIDs in map: 9
-lookup_connection_by_id() - FOUND connection for CID=fa66966b5e517622441958ba032a5fef
-CID lookup SUCCESS: Found connection for DCID=fa66966b5e517622441958ba032a5fef
-quiche: quiche: fa66966b5e517622441958ba032a5fef rx pkt Handshake version=1 dcid=fa66966b5e517622441958ba032a5fef scid=e480573aef4954f1f8335c05d132c779 len=62 pn=3 
-quiche: quiche: fa66966b5e517622441958ba032a5fef rx frm ACK delay=57 blocks=[1..2] ecn_counts=None
-quiche: quiche::recovery::congestion::recovery: fa66966b5e517622441958ba032a5fef packet newly acked 2
-quiche: quiche: fa66966b5e517622441958ba032a5fef rx frm CRYPTO off=0 len=36
-quiche: quiche::tls: fa66966b5e517622441958ba032a5fef set read secret lvl=OneRTT
-quiche: quiche::tls: fa66966b5e517622441958ba032a5fef write message lvl=OneRTT len=396
-quiche: quiche: fa66966b5e517622441958ba032a5fef dropped epoch 1 state
-quiche: quiche: fa66966b5e517622441958ba032a5fef connection established: proto=Ok("h3") cipher=Some(AES128_GCM) curve=Some("X25519") sigalg=None resumed=false TransportParams { original_destination_connection_id: None, max_idle_timeout: 30000, stateless_reset_token: None, max_udp_payload_size: 1350, initial_max_data: 10485760, initial_max_stream_data_bidi_local: 6291456, initial_max_stream_data_bidi_remote: 6291456, initial_max_stream_data_uni: 6291456, initial_max_streams_bidi: 100, initial_max_streams_uni: 3, ack_delay_exponent: 3, max_ack_delay: 25, disable_active_migration: true, active_conn_id_limit: 2, initial_source_connection_id: Some(e480573aef4954f1f8335c05d132c779), retry_source_connection_id: None, max_datagram_frame_size: None, unknown_params: None }
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] handshake complete, ALPN='h3'
-quiche: quiche: fa66966b5e517622441958ba032a5fef tx pkt Short dcid=e480573aef4954f1f8335c05d132c779 key_phase=false len=401 pn=3 
-quiche: quiche: fa66966b5e517622441958ba032a5fef tx frm HANDSHAKE_DONE
-quiche: quiche: fa66966b5e517622441958ba032a5fef tx frm CRYPTO off=0 len=396
-quiche: quiche::recovery::congestion::recovery: fa66966b5e517622441958ba032a5fef timer=27.981975ms latest_rtt=2.097528ms srtt=1.208109ms min_rtt=1.143911ms rttvar=448.98µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, end_of_app_limited: 2, last_sent_packet: 3, largest_acked: 2, rate_sample: RateSample { bandwidth: 8.26 Mbps, is_app_limited: true, interval: 2.249733ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 496264602 }), send_elapsed: 152.205µs, ack_elapsed: 2.249733ms, rtt: 2.097528ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 435, rate: 13968110, last_update: Instant { tv_sec: 755555, tv_nsec: 498629325 }, next_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, max_datagram_size: 1350, last_packet_size: Some(435), iv: 0ns,
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] send: 435 bytes to 172.25.1.10:443 via fd=6 (first=0x5d)
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] sendto OK: 435 bytes
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] sent 1 packets, 435 bytes total
+lookup_connection_by_id() - FOUND connection for CID=aeac2acc6722a85ec8495bf7bc9c9db5
+CID lookup SUCCESS: Found connection for DCID=aeac2acc6722a85ec8495bf7bc9c9db5
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 rx pkt Handshake version=1 dcid=aeac2acc6722a85ec8495bf7bc9c9db5 scid=8afd9692601caa3fe8abcac90decbc36 len=62 pn=3 
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 rx frm ACK delay=27 blocks=[1..2] ecn_counts=None
+quiche: quiche::recovery::congestion::recovery: aeac2acc6722a85ec8495bf7bc9c9db5 packet newly acked 2
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 rx frm CRYPTO off=0 len=36
+quiche: quiche::tls: aeac2acc6722a85ec8495bf7bc9c9db5 set read secret lvl=OneRTT
+quiche: quiche::tls: aeac2acc6722a85ec8495bf7bc9c9db5 write message lvl=OneRTT len=396
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 dropped epoch 1 state
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 connection established: proto=Ok("h3") cipher=Some(AES128_GCM) curve=Some("X25519") sigalg=None resumed=false TransportParams { original_destination_connection_id: None, max_idle_timeout: 30000, stateless_reset_token: None, max_udp_payload_size: 1350, initial_max_data: 10485760, initial_max_stream_data_bidi_local: 6291456, initial_max_stream_data_bidi_remote: 6291456, initial_max_stream_data_uni: 6291456, initial_max_streams_bidi: 100, initial_max_streams_uni: 3, ack_delay_exponent: 3, max_ack_delay: 25, disable_active_migration: true, active_conn_id_limit: 2, initial_source_connection_id: Some(8afd9692601caa3fe8abcac90decbc36), retry_source_connection_id: None, max_datagram_frame_size: None, unknown_params: None }
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] handshake complete, ALPN='h3'
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 tx pkt Short dcid=8afd9692601caa3fe8abcac90decbc36 key_phase=false len=401 pn=3 
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 tx frm HANDSHAKE_DONE
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 tx frm CRYPTO off=0 len=396
+quiche: quiche::recovery::congestion::recovery: aeac2acc6722a85ec8495bf7bc9c9db5 timer=26.51314ms latest_rtt=751.513µs srtt=525.508µs min_rtt=521.281µs rttvar=153.666µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, end_of_app_limited: 2, last_sent_packet: 3, largest_acked: 2, rate_sample: RateSample { bandwidth: 17.66 Mbps, is_app_limited: true, interval: 903.603µs, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 992229718 }), send_elapsed: 152.09µs, ack_elapsed: 903.603µs, rtt: 751.513µs } } pacer=Pacer { enabled: true, capacity: 13500, used: 435, rate: 32111785, last_update: Instant { tv_sec: 757749, tv_nsec: 993188108 }, next_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, max_datagram_size: 1350, last_packet_size: Some(435), iv: 0ns,
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] send: 435 bytes to 172.25.1.10:443 via fd=6 (first=0x46)
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] sendto OK: 435 bytes
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] sent 1 packets, 435 bytes total
 Server connection established from 172.25.1.10 port 443 (family=2), attempting to bind node
 Created connection_t for unbound incoming QUIC from 172.25.1.10 port 443, waiting for client stream and ID message
 QUIC packet processed: qconn->node=(nil)
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-quiche_conn_readable returned non-NULL
-quiche_stream_iter_next returned false - no readable streams
+QUIC meta-connection without node (unbound), looking up by address
 Detected QUIC Long Header packet: first_byte=0xe0
 QUIC demux: received UDP len=52 from 172.25.1.10:443
 Parsed QUIC header: type=5 version=0x0 DCID=<empty> (len=0) SCID=<empty> (len=0)
-quiche: quiche: fa66966b5e517622441958ba032a5fef rx pkt Short dcid=fa66966b5e517622441958ba032a5fef key_phase=false len=35 pn=4 
-quiche: quiche: fa66966b5e517622441958ba032a5fef rx frm STREAM id=0 off=0 len=13 fin=false
-quiche: quiche: fa66966b5e517622441958ba032a5fef tx pkt Short dcid=e480573aef4954f1f8335c05d132c779 key_phase=false len=5 pn=4 
-quiche: quiche: fa66966b5e517622441958ba032a5fef tx frm ACK delay=2 blocks=[4..4] ecn_counts=None
-quiche: quiche::recovery::congestion::recovery: fa66966b5e517622441958ba032a5fef timer=27.825628ms latest_rtt=2.097528ms srtt=1.208109ms min_rtt=1.143911ms rttvar=448.98µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, end_of_app_limited: 2, last_sent_packet: 4, largest_acked: 2, rate_sample: RateSample { bandwidth: 8.26 Mbps, is_app_limited: true, interval: 2.249733ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 496264602 }), send_elapsed: 152.205µs, ack_elapsed: 2.249733ms, rtt: 2.097528ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 13968110, last_update: Instant { tv_sec: 755555, tv_nsec: 498787549 }, next_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, max_datagram_size: 1350, last_packet_size: None, iv: 31.142µs, 
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] send: 39 bytes to 172.25.1.10:443 via fd=6 (first=0x40)
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] sendto OK: 39 bytes
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] sent 1 packets, 39 bytes total
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 rx pkt Short dcid=aeac2acc6722a85ec8495bf7bc9c9db5 key_phase=false len=35 pn=4 
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 rx frm STREAM id=0 off=0 len=13 fin=false
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 tx pkt Short dcid=8afd9692601caa3fe8abcac90decbc36 key_phase=false len=5 pn=4 
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 tx frm ACK delay=1 blocks=[4..4] ecn_counts=None
+quiche: quiche::recovery::congestion::recovery: aeac2acc6722a85ec8495bf7bc9c9db5 timer=26.402857ms latest_rtt=751.513µs srtt=525.508µs min_rtt=521.281µs rttvar=153.666µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, end_of_app_limited: 2, last_sent_packet: 4, largest_acked: 2, rate_sample: RateSample { bandwidth: 17.66 Mbps, is_app_limited: true, interval: 903.603µs, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 992229718 }), send_elapsed: 152.09µs, ack_elapsed: 903.603µs, rtt: 751.513µs } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 32111785, last_update: Instant { tv_sec: 757749, tv_nsec: 993303105 }, next_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, max_datagram_size: 1350, last_packet_size: None, iv: 13.546µs,
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] send: 39 bytes to 172.25.1.10:443 via fd=6 (first=0x59)
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] sendto OK: 39 bytes
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] sent 1 packets, 39 bytes total
 Server connection established from 172.25.1.10 port 443 (family=2), attempting to bind node
 QUIC packet processed: qconn->node=(nil)
-Stream 0 peek result: -1 (QUICHE_ERR_DONE=-1)
-quiche_conn_readable returned non-NULL
-quiche_stream_iter_next returned false - no readable streams
+QUIC meta-connection without node (unbound), looking up by address
 Detected QUIC Short Header packet: first_byte=0x40
-Looking up QUIC connection for node node3 at address 172.25.2.12 port 443 (sa_family=2)
-Found existing QUIC connection for node node3
-QUIC connection to node3 already exists, reusing
 Looking up QUIC connection for node node1 at address 172.25.1.10 port 443 (sa_family=2)
 Found existing QUIC connection for node node1
 QUIC connection to node1 already exists, reusing
+Looking up QUIC connection for node node3 at address 172.25.2.12 port 443 (sa_family=2)
+Found existing QUIC connection for node node3
+QUIC connection to node3 already exists, reusing
 
 --- Errors & Warnings ---
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-QUIC[3661363361343333323433663963623431376130396566376161656139623065] recv failed: -3
+QUIC[3639313939336362633666316131656533383865356465313433356337373631] recv failed: -3
 Failed to process Initial packet: -1
-QUIC[6336313935306431633237636362313565386336346162663132396661636133] recv failed: -3
+QUIC[3965373039626230663865343332373832306435333037386239613663636538] recv failed: -3
 Failed to process Initial packet: -1
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-Stream 0 peek result: -1 (QUICHE_ERR_DONE=-1)
 
 === NODE3 LOGS ===
 --- QUIC Initialization ---
-Parsed QUIC header: type=3 version=0x1 DCID=64fddc387a4be83a9bb933f369d895db (len=16) SCID=666faee85e8ed044c8b77c2874c37c37 (len=16)
-lookup_connection_by_id() called for CID=64fddc387a4be83a9bb933f369d895db (len=16)
+QUIC packet processed: qconn->node=(nil)
+QUIC packet has no associated node and no unbound meta found
+Detected QUIC Long Header packet: first_byte=0xc0
+QUIC demux: received UDP len=103 from 172.25.2.10:443
+Parsed QUIC header: type=3 version=0x1 DCID=e52c887cf73050c176b4a1c6cd3da60c (len=16) SCID=0389c61fe8ee458888db91761805bbfa (len=16)
+lookup_connection_by_id() called for CID=e52c887cf73050c176b4a1c6cd3da60c (len=16)
 Total registered CIDs in map: 9
-lookup_connection_by_id() - FOUND connection for CID=64fddc387a4be83a9bb933f369d895db
-CID lookup SUCCESS: Found connection for DCID=64fddc387a4be83a9bb933f369d895db
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db rx pkt Handshake version=1 dcid=64fddc387a4be83a9bb933f369d895db scid=666faee85e8ed044c8b77c2874c37c37 len=62 pn=3 
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db rx frm ACK delay=36 blocks=[1..2] ecn_counts=None
-quiche: quiche::recovery::congestion::recovery: 64fddc387a4be83a9bb933f369d895db packet newly acked 2
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db rx frm CRYPTO off=0 len=36
-quiche: quiche::tls: 64fddc387a4be83a9bb933f369d895db set read secret lvl=OneRTT
-quiche: quiche::tls: 64fddc387a4be83a9bb933f369d895db write message lvl=OneRTT len=396
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db dropped epoch 1 state
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db connection established: proto=Ok("h3") cipher=Some(AES128_GCM) curve=Some("X25519") sigalg=None resumed=false TransportParams { original_destination_connection_id: None, max_idle_timeout: 30000, stateless_reset_token: None, max_udp_payload_size: 1350, initial_max_data: 10485760, initial_max_stream_data_bidi_local: 6291456, initial_max_stream_data_bidi_remote: 6291456, initial_max_stream_data_uni: 6291456, initial_max_streams_bidi: 100, initial_max_streams_uni: 3, ack_delay_exponent: 3, max_ack_delay: 25, disable_active_migration: true, active_conn_id_limit: 2, initial_source_connection_id: Some(666faee85e8ed044c8b77c2874c37c37), retry_source_connection_id: None, max_datagram_frame_size: None, unknown_params: None }
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] handshake complete, ALPN='h3'
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db tx pkt Short dcid=666faee85e8ed044c8b77c2874c37c37 key_phase=false len=401 pn=3 
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db tx frm HANDSHAKE_DONE
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db tx frm CRYPTO off=0 len=396
-quiche: quiche::recovery::congestion::recovery: 64fddc387a4be83a9bb933f369d895db timer=58.032285ms latest_rtt=15.901002ms srtt=15.490702ms min_rtt=15.469028ms rttvar=4.391911ms cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, end_of_app_limited: 2, last_sent_packet: 3, largest_acked: 2, rate_sample: RateSample { bandwidth: 811.86 Kbps, is_app_limited: true, interval: 16.002782ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 466436523 }), send_elapsed: 101.78µs, ack_elapsed: 16.002782ms, rtt: 15.901002ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 435, rate: 1089363, last_update: Instant { tv_sec: 755555, tv_nsec: 482554673 }, next_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, max_datagram_size: 1350, last_packet_size: Some(435), i
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] send: 435 bytes to 172.25.2.10:443 via fd=6 (first=0x4d)
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] sendto OK: 435 bytes
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] sent 1 packets, 435 bytes total
+lookup_connection_by_id() - FOUND connection for CID=e52c887cf73050c176b4a1c6cd3da60c
+CID lookup SUCCESS: Found connection for DCID=e52c887cf73050c176b4a1c6cd3da60c
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c rx pkt Handshake version=1 dcid=e52c887cf73050c176b4a1c6cd3da60c scid=0389c61fe8ee458888db91761805bbfa len=62 pn=3 
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c rx frm ACK delay=24 blocks=[1..2] ecn_counts=None
+quiche: quiche::recovery::congestion::recovery: e52c887cf73050c176b4a1c6cd3da60c packet newly acked 2
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c rx frm CRYPTO off=0 len=36
+quiche: quiche::tls: e52c887cf73050c176b4a1c6cd3da60c set read secret lvl=OneRTT
+quiche: quiche::tls: e52c887cf73050c176b4a1c6cd3da60c write message lvl=OneRTT len=396
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c dropped epoch 1 state
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c connection established: proto=Ok("h3") cipher=Some(AES128_GCM) curve=Some("X25519") sigalg=None resumed=false TransportParams { original_destination_connection_id: None, max_idle_timeout: 30000, stateless_reset_token: None, max_udp_payload_size: 1350, initial_max_data: 10485760, initial_max_stream_data_bidi_local: 6291456, initial_max_stream_data_bidi_remote: 6291456, initial_max_stream_data_uni: 6291456, initial_max_streams_bidi: 100, initial_max_streams_uni: 3, ack_delay_exponent: 3, max_ack_delay: 25, disable_active_migration: true, active_conn_id_limit: 2, initial_source_connection_id: Some(0389c61fe8ee458888db91761805bbfa), retry_source_connection_id: None, max_datagram_frame_size: None, unknown_params: None }
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] handshake complete, ALPN='h3'
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c tx pkt Short dcid=0389c61fe8ee458888db91761805bbfa key_phase=false len=401 pn=3 
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c tx frm HANDSHAKE_DONE
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c tx frm CRYPTO off=0 len=396
+quiche: quiche::recovery::congestion::recovery: e52c887cf73050c176b4a1c6cd3da60c timer=26.723068ms latest_rtt=893.827µs srtt=737.713µs min_rtt=713.261µs rttvar=248.433µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 757749, tv_nsec: 950082533 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 950082533 }, end_of_app_limited: 2, last_sent_packet: 3, largest_acked: 2, rate_sample: RateSample { bandwidth: 13.14 Mbps, is_app_limited: true, interval: 1.041385ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 948956562 }), send_elapsed: 147.558µs, ack_elapsed: 1.041385ms, rtt: 893.827µs } } pacer=Pacer { enabled: true, capacity: 13500, used: 435, rate: 22874749, last_update: Instant { tv_sec: 757749, tv_nsec: 950082533 }, next_time: Instant { tv_sec: 757749, tv_nsec: 950082533 }, max_datagram_size: 1350, last_packet_size: Some(435), iv: 0n
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] send: 435 bytes to 172.25.2.10:443 via fd=6 (first=0x54)
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] sendto OK: 435 bytes
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] sent 1 packets, 435 bytes total
 Server connection established from 172.25.2.10 port 443 (family=2), attempting to bind node
 Created connection_t for unbound incoming QUIC from 172.25.2.10 port 443, waiting for client stream and ID message
 QUIC packet processed: qconn->node=(nil)
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-quiche_conn_readable returned non-NULL
-quiche_stream_iter_next returned false - no readable streams
+QUIC meta-connection without node (unbound), looking up by address
 Detected QUIC Long Header packet: first_byte=0xe0
 QUIC demux: received UDP len=52 from 172.25.2.10:443
 Parsed QUIC header: type=5 version=0x0 DCID=<empty> (len=0) SCID=<empty> (len=0)
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db rx pkt Short dcid=64fddc387a4be83a9bb933f369d895db key_phase=false len=35 pn=4 
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db rx frm STREAM id=0 off=0 len=13 fin=false
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db tx pkt Short dcid=666faee85e8ed044c8b77c2874c37c37 key_phase=false len=5 pn=4 
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db tx frm ACK delay=16 blocks=[4..4] ecn_counts=None
-quiche: quiche::recovery::congestion::recovery: 64fddc387a4be83a9bb933f369d895db timer=57.74527ms latest_rtt=15.901002ms srtt=15.490702ms min_rtt=15.469028ms rttvar=4.391911ms cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, end_of_app_limited: 2, last_sent_packet: 4, largest_acked: 2, rate_sample: RateSample { bandwidth: 811.86 Kbps, is_app_limited: true, interval: 16.002782ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 466436523 }), send_elapsed: 101.78µs, ack_elapsed: 16.002782ms, rtt: 15.901002ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 1089363, last_update: Instant { tv_sec: 755555, tv_nsec: 482857899 }, next_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, max_datagram_size: 1350, last_packet_size: None, iv: 399.3
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] send: 39 bytes to 172.25.2.10:443 via fd=6 (first=0x47)
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] sendto OK: 39 bytes
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] sent 1 packets, 39 bytes total
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c rx pkt Short dcid=e52c887cf73050c176b4a1c6cd3da60c key_phase=false len=35 pn=4 
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c rx frm STREAM id=0 off=0 len=13 fin=false
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c tx pkt Short dcid=0389c61fe8ee458888db91761805bbfa key_phase=false len=5 pn=4 
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c tx frm ACK delay=30 blocks=[4..4] ecn_counts=None
+quiche: quiche::recovery::congestion::recovery: e52c887cf73050c176b4a1c6cd3da60c timer=25.727489ms latest_rtt=893.827µs srtt=737.713µs min_rtt=713.261µs rttvar=248.433µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 757749, tv_nsec: 950082533 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 950082533 }, end_of_app_limited: 2, last_sent_packet: 4, largest_acked: 2, rate_sample: RateSample { bandwidth: 13.14 Mbps, is_app_limited: true, interval: 1.041385ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 948956562 }), send_elapsed: 147.558µs, ack_elapsed: 1.041385ms, rtt: 893.827µs } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 22874749, last_update: Instant { tv_sec: 757749, tv_nsec: 951074696 }, next_time: Instant { tv_sec: 757749, tv_nsec: 951074696 }, max_datagram_size: 1350, last_packet_size: Some(0), iv: 0ns, m
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] send: 39 bytes to 172.25.2.10:443 via fd=6 (first=0x4d)
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] sendto OK: 39 bytes
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] sent 1 packets, 39 bytes total
 Server connection established from 172.25.2.10 port 443 (family=2), attempting to bind node
 QUIC packet processed: qconn->node=(nil)
-Stream 0 peek result: -1 (QUICHE_ERR_DONE=-1)
-quiche_conn_readable returned non-NULL
-quiche_stream_iter_next returned false - no readable streams
+QUIC meta-connection without node (unbound), looking up by address
 Detected QUIC Short Header packet: first_byte=0x40
 Looking up QUIC connection for node node2 at address 172.25.1.11 port 443 (sa_family=2)
 Found existing QUIC connection for node node2
@@ -787,13 +783,10 @@ Found existing QUIC connection for node node1
 QUIC connection to node1 already exists, reusing
 
 --- Errors & Warnings ---
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-QUIC[6535616161346438633664316130346434623630343032396164656365336636] recv failed: -3
+QUIC[3233643863646634613362633039363135376234643135373834316334653530] recv failed: -3
 Failed to process Initial packet: -1
-QUIC[6263626131663332313030366365353266383764356233396237616266323034] recv failed: -3
+QUIC[3937336563353639326662346633613338333462363531653361303137373535] recv failed: -3
 Failed to process Initial packet: -1
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-Stream 0 peek result: -1 (QUICHE_ERR_DONE=-1)
 
 ==========================================
 FULL LOGS (LAST 100 LINES EACH)
@@ -803,56 +796,56 @@ FULL LOGS (LAST 100 LINES EACH)
 QUIC meta: flushing 13 bytes from outbuf via stream 0 (handshake_complete=1)
 Sent 13 bytes on QUIC meta stream 0
 QUIC meta: sent 13 bytes on stream 0, calling quic_conn_send
-quiche: quiche: e480573aef4954f1f8335c05d132c779 tx pkt Short dcid=fa66966b5e517622441958ba032a5fef key_phase=false len=18 pn=4 
-quiche: quiche: e480573aef4954f1f8335c05d132c779 tx frm STREAM id=0 off=0 len=13 fin=false
-quiche: quiche::recovery::congestion::recovery: e480573aef4954f1f8335c05d132c779 timer=3.817129ms latest_rtt=1.463648ms srtt=1.463648ms min_rtt=1.463648ms rttvar=731.824µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=155 app_limited=true congestion_recovery_start_time=None Rate { delivered: 299, delivered_time: Instant { tv_sec: 755555, tv_nsec: 496923629 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 496923629 }, end_of_app_limited: 3, last_sent_packet: 4, largest_acked: 0, rate_sample: RateSample { bandwidth: 1.63 Mbps, is_app_limited: true, interval: 1.463648ms, delivered: 299, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 495024323 }), send_elapsed: 0ns, ack_elapsed: 1.463648ms, rtt: 1.463648ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 52, rate: 11529411, last_update: Instant { tv_sec: 755555, tv_nsec: 497980629 }, next_time: Instant { tv_sec: 755555, tv_nsec: 498546737 }, max_datagram_size: 1350, last_packet_size: Some(52), iv: 0ns, max_pacing
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] send: 52 bytes to 172.25.1.11:443 via fd=6 (first=0x5a)
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] sendto OK: 52 bytes
-QUIC[6534383035373361656634393534663166383333356330356431333263373739] sent 1 packets, 52 bytes total
-QUIC packet processed: qconn->node=0x61d154c48480
-QUIC node found: name=node2, connection=0x61d154ce7bc0
+quiche: quiche: 8afd9692601caa3fe8abcac90decbc36 tx pkt Short dcid=aeac2acc6722a85ec8495bf7bc9c9db5 key_phase=false len=18 pn=4 
+quiche: quiche: 8afd9692601caa3fe8abcac90decbc36 tx frm STREAM id=0 off=0 len=13 fin=false
+quiche: quiche::recovery::congestion::recovery: 8afd9692601caa3fe8abcac90decbc36 timer=4.058331ms latest_rtt=1.398244ms srtt=1.398244ms min_rtt=1.398244ms rttvar=699.122µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=155 app_limited=true congestion_recovery_start_time=None Rate { delivered: 299, delivered_time: Instant { tv_sec: 757749, tv_nsec: 992603802 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 992603802 }, end_of_app_limited: 3, last_sent_packet: 4, largest_acked: 0, rate_sample: RateSample { bandwidth: 1.71 Mbps, is_app_limited: true, interval: 1.398244ms, delivered: 299, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 991024887 }), send_elapsed: 0ns, ack_elapsed: 1.398244ms, rtt: 1.398244ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 52, rate: 12068709, last_update: Instant { tv_sec: 757749, tv_nsec: 993016055 }, next_time: Instant { tv_sec: 757749, tv_nsec: 993152510 }, max_datagram_size: 1350, last_packet_size: Some(52), iv: 0ns, max_pacing
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] send: 52 bytes to 172.25.1.11:443 via fd=6 (first=0x5d)
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] sendto OK: 52 bytes
+QUIC[3861666439363932363031636161336665386162636163393064656362633336] sent 1 packets, 52 bytes total
+QUIC packet processed: qconn->node=0x5a1770008480
+QUIC node found: name=node2, connection=0x5a17700a7bc0
 QUIC checking connection: name=node2, quic_meta=1, quic_stream_id=0, outgoing=(nil)
-quic_transport_is_enabled() = 1 (quic_manager=0x61d154c47bc0, enabled=1)
+quic_transport_is_enabled() = 1 (quic_manager=0x5a1770007bc0, enabled=1)
 Detected QUIC Long Header packet: first_byte=0xe0
-quic_transport_is_enabled() = 1 (quic_manager=0x61d154c47bc0, enabled=1)
+quic_transport_is_enabled() = 1 (quic_manager=0x5a1770007bc0, enabled=1)
 QUIC demux: received UDP len=435 from 172.25.1.11:443
 Parsed QUIC header: type=5 version=0x0 DCID=<empty> (len=0) SCID=<empty> (len=0)
 TRACE after parse: scid=<empty> scid_len=0
 Received QUIC packet from unknown source: type=5 version=0x0
 Accepted QUIC server connection
-Registered CID=ed7424ddbfeb4002e76273a3f472346c (len=16) for demultiplexing
+Registered CID=57ac580fd0f3c1363ef415e3c983563c (len=16) for demultiplexing
 Registered our SCID (len=16)
 Created QUIC server connection for new client
-QUIC[6564373432346464626665623430303265373632373361336634373233343663] recv failed: -3
+QUIC[3537616335383066643066336331333633656634313565336339383335363363] recv failed: -3
 Failed to process Initial packet: -1
 Freed QUIC connection
-quic_transport_is_enabled() = 1 (quic_manager=0x61d154c47bc0, enabled=1)
-Detected QUIC Short Header packet: first_byte=0x5d
-quic_transport_is_enabled() = 1 (quic_manager=0x61d154c47bc0, enabled=1)
+quic_transport_is_enabled() = 1 (quic_manager=0x5a1770007bc0, enabled=1)
+Detected QUIC Short Header packet: first_byte=0x46
+quic_transport_is_enabled() = 1 (quic_manager=0x5a1770007bc0, enabled=1)
 QUIC demux: received UDP len=39 from 172.25.1.11:443
 Parsed QUIC header: type=5 version=0x0 DCID=<empty> (len=0) SCID=<empty> (len=0)
 TRACE after parse: scid=<empty> scid_len=0
 Received QUIC packet from unknown source: type=5 version=0x0
 Accepted QUIC server connection
-Registered CID=ef2e8abf39c44dc02997b667401eb529 (len=16) for demultiplexing
+Registered CID=90d96cb3087cce58ac6766ec91aa8b3e (len=16) for demultiplexing
 Registered our SCID (len=16)
 Created QUIC server connection for new client
-QUIC[6566326538616266333963343464633032393937623636373430316562353239] recv failed: -3
+QUIC[3930643936636233303837636365353861633637363665633931616138623365] recv failed: -3
 Failed to process Initial packet: -1
 Freed QUIC connection
-quic_transport_is_enabled() = 1 (quic_manager=0x61d154c47bc0, enabled=1)
-Detected QUIC Short Header packet: first_byte=0x40
+quic_transport_is_enabled() = 1 (quic_manager=0x5a1770007bc0, enabled=1)
+Detected QUIC Short Header packet: first_byte=0x59
 Connection from localhost port unix
-receive_request: conn=0x61d154cfc3a0 quic_meta=0 allow=0 raw='0 ^511C866639635F29ADCC852B79C9548D0C1550E584644B295FF8DFA5B92F49F9 0'
-Got ID from <control> (localhost port unix): 0 ^511C866639635F29ADCC852B79C9548D0C1550E584644B295FF8DFA5B92F49F9 0
+receive_request: conn=0x5a17700bc3a0 quic_meta=0 allow=0 raw='0 ^BE81E336BE0493420941ED7887E9B4C184F8A6E2594CE9F65ECFFFCC201D5CFE 0'
+Got ID from <control> (localhost port unix): 0 ^BE81E336BE0493420941ED7887E9B4C184F8A6E2594CE9F65ECFFFCC201D5CFE 0
 Sending ID to <control> (localhost port unix): 0 node1 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x61d154cfc3a0 quic_meta=0 allow=18 raw='18 3'
+receive_request: conn=0x5a17700bc3a0 quic_meta=0 allow=18 raw='18 3'
 Got CONTROL from <control> (localhost port unix): 18 3
-Sending CONTROL to <control> (localhost port unix): 18 3 node1 79ae6db0921b MYSELF port 443 0 0 0 0 700000c 850 node1 node1 0 1518 0 1518 1762899790 -1 6 516 4 504
+Sending CONTROL to <control> (localhost port unix): 18 3 node1 79ae6db0921b MYSELF port 443 0 0 0 0 700000c 850 node1 node1 0 1518 0 1518 1762902015 -1 6 516 4 504
 Sending 112 bytes of metadata to <control> (localhost port unix)
 Sending CONTROL to <control> (localhost port unix): 18 3 node2 641dda6330a1 unknown port unknown 0 0 0 0 0 800 - - 0 1518 0 1518 0 -1 0 0 0 0
 Sending 90 bytes of metadata to <control> (localhost port unix)
@@ -863,14 +856,14 @@ Sending 5 bytes of metadata to <control> (localhost port unix)
 Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 Connection from localhost port unix
-receive_request: conn=0x61d154cfcd20 quic_meta=0 allow=0 raw='0 ^511C866639635F29ADCC852B79C9548D0C1550E584644B295FF8DFA5B92F49F9 0'
-Got ID from <control> (localhost port unix): 0 ^511C866639635F29ADCC852B79C9548D0C1550E584644B295FF8DFA5B92F49F9 0
+receive_request: conn=0x5a17700bcd20 quic_meta=0 allow=0 raw='0 ^BE81E336BE0493420941ED7887E9B4C184F8A6E2594CE9F65ECFFFCC201D5CFE 0'
+Got ID from <control> (localhost port unix): 0 ^BE81E336BE0493420941ED7887E9B4C184F8A6E2594CE9F65ECFFFCC201D5CFE 0
 Sending ID to <control> (localhost port unix): 0 node1 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x61d154cfcd20 quic_meta=0 allow=18 raw='18 6'
+receive_request: conn=0x5a17700bcd20 quic_meta=0 allow=18 raw='18 6'
 Got CONTROL from <control> (localhost port unix): 18 6
 Sending CONTROL to <control> (localhost port unix): 18 6 node3 172.25.2.12 port 443 0 0 300000
 Sending 43 bytes of metadata to <control> (localhost port unix)
@@ -887,14 +880,14 @@ Sending 5 bytes of metadata to <control> (localhost port unix)
 Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 Connection from localhost port unix
-receive_request: conn=0x61d154cfcd20 quic_meta=0 allow=0 raw='0 ^511C866639635F29ADCC852B79C9548D0C1550E584644B295FF8DFA5B92F49F9 0'
-Got ID from <control> (localhost port unix): 0 ^511C866639635F29ADCC852B79C9548D0C1550E584644B295FF8DFA5B92F49F9 0
+receive_request: conn=0x5a17700bcd20 quic_meta=0 allow=0 raw='0 ^BE81E336BE0493420941ED7887E9B4C184F8A6E2594CE9F65ECFFFCC201D5CFE 0'
+Got ID from <control> (localhost port unix): 0 ^BE81E336BE0493420941ED7887E9B4C184F8A6E2594CE9F65ECFFFCC201D5CFE 0
 Sending ID to <control> (localhost port unix): 0 node1 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x61d154cfcd20 quic_meta=0 allow=18 raw='18 4'
+receive_request: conn=0x5a17700bcd20 quic_meta=0 allow=18 raw='18 4'
 Got CONTROL from <control> (localhost port unix): 18 4
 Sending CONTROL to <control> (localhost port unix): 18 4
 Sending 5 bytes of metadata to <control> (localhost port unix)
@@ -902,27 +895,28 @@ Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 
 === NODE2 FULL LOG ===
+find_unbound: looking for connection from 172.25.1.10 port 443
+  [1] c->hostname=172.25.1.10 port 443 quic_meta=1 node=(nil)
 find_unbound: FOUND match for 172.25.1.10 port 443
 Found unbound connection for peer: hostname=172.25.1.10 port 443, quic_stream_id=-1
-Attempting stream discovery for unbound peer 172.25.1.10 port 443
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-quiche_conn_readable returned non-NULL
-quiche_stream_iter_next returned false - no readable streams
-quic_transport_is_enabled() = 1 (quic_manager=0x5e27367a9ae0, enabled=1)
+Assigned stream 0 to unbound peer 172.25.1.10 port 443 (clients always use stream 0)
+Processing metadata for unbound connection
+QUIC meta-connection without node (unbound), looking up by address
+quic_transport_is_enabled() = 1 (quic_manager=0x648c0ada8ae0, enabled=1)
 Detected QUIC Long Header packet: first_byte=0xe0
-quic_transport_is_enabled() = 1 (quic_manager=0x5e27367a9ae0, enabled=1)
+quic_transport_is_enabled() = 1 (quic_manager=0x648c0ada8ae0, enabled=1)
 QUIC demux: received UDP len=52 from 172.25.1.10:443
 Parsed QUIC header: type=5 version=0x0 DCID=<empty> (len=0) SCID=<empty> (len=0)
 TRACE after parse: scid=<empty> scid_len=0
 Found connection by peer address fallback
-quiche: quiche: fa66966b5e517622441958ba032a5fef rx pkt Short dcid=fa66966b5e517622441958ba032a5fef key_phase=false len=35 pn=4 
-quiche: quiche: fa66966b5e517622441958ba032a5fef rx frm STREAM id=0 off=0 len=13 fin=false
-quiche: quiche: fa66966b5e517622441958ba032a5fef tx pkt Short dcid=e480573aef4954f1f8335c05d132c779 key_phase=false len=5 pn=4 
-quiche: quiche: fa66966b5e517622441958ba032a5fef tx frm ACK delay=2 blocks=[4..4] ecn_counts=None
-quiche: quiche::recovery::congestion::recovery: fa66966b5e517622441958ba032a5fef timer=27.825628ms latest_rtt=2.097528ms srtt=1.208109ms min_rtt=1.143911ms rttvar=448.98µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, end_of_app_limited: 2, last_sent_packet: 4, largest_acked: 2, rate_sample: RateSample { bandwidth: 8.26 Mbps, is_app_limited: true, interval: 2.249733ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 496264602 }), send_elapsed: 152.205µs, ack_elapsed: 2.249733ms, rtt: 2.097528ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 13968110, last_update: Instant { tv_sec: 755555, tv_nsec: 498787549 }, next_time: Instant { tv_sec: 755555, tv_nsec: 498629325 }, max_datagram_size: 1350, last_packet_size: None, iv: 31.142µs, 
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] send: 39 bytes to 172.25.1.10:443 via fd=6 (first=0x40)
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] sendto OK: 39 bytes
-QUIC[6661363639363662356535313736323234343139353862613033326135666566] sent 1 packets, 39 bytes total
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 rx pkt Short dcid=aeac2acc6722a85ec8495bf7bc9c9db5 key_phase=false len=35 pn=4 
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 rx frm STREAM id=0 off=0 len=13 fin=false
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 tx pkt Short dcid=8afd9692601caa3fe8abcac90decbc36 key_phase=false len=5 pn=4 
+quiche: quiche: aeac2acc6722a85ec8495bf7bc9c9db5 tx frm ACK delay=1 blocks=[4..4] ecn_counts=None
+quiche: quiche::recovery::congestion::recovery: aeac2acc6722a85ec8495bf7bc9c9db5 timer=26.402857ms latest_rtt=751.513µs srtt=525.508µs min_rtt=521.281µs rttvar=153.666µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, end_of_app_limited: 2, last_sent_packet: 4, largest_acked: 2, rate_sample: RateSample { bandwidth: 17.66 Mbps, is_app_limited: true, interval: 903.603µs, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 992229718 }), send_elapsed: 152.09µs, ack_elapsed: 903.603µs, rtt: 751.513µs } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 32111785, last_update: Instant { tv_sec: 757749, tv_nsec: 993303105 }, next_time: Instant { tv_sec: 757749, tv_nsec: 993188108 }, max_datagram_size: 1350, last_packet_size: None, iv: 13.546µs,
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] send: 39 bytes to 172.25.1.10:443 via fd=6 (first=0x59)
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] sendto OK: 39 bytes
+QUIC[6165616332616363363732326138356563383439356266376263396339646235] sent 1 packets, 39 bytes total
 Server connection established from 172.25.1.10 port 443 (family=2), attempting to bind node
   Checking node 'node1': addr=unspec port unspec family=0
   Checking node 'node2': addr=unspec port unspec family=0
@@ -935,34 +929,33 @@ QUIC packet processed: qconn->node=(nil)
 find_unbound: looking for connection from 172.25.1.10 port 443
   [1] c->hostname=172.25.1.10 port 443 quic_meta=1 node=(nil)
 find_unbound: FOUND match for 172.25.1.10 port 443
-Found unbound connection for peer: hostname=172.25.1.10 port 443, quic_stream_id=-1
-Attempting stream discovery for unbound peer 172.25.1.10 port 443
-Stream 0 peek result: -1 (QUICHE_ERR_DONE=-1)
-quiche_conn_readable returned non-NULL
-quiche_stream_iter_next returned false - no readable streams
-quic_transport_is_enabled() = 1 (quic_manager=0x5e27367a9ae0, enabled=1)
+Found unbound connection for peer: hostname=172.25.1.10 port 443, quic_stream_id=0
+Unbound connection already has stream_id=0
+Processing metadata for unbound connection
+QUIC meta-connection without node (unbound), looking up by address
+quic_transport_is_enabled() = 1 (quic_manager=0x648c0ada8ae0, enabled=1)
 Detected QUIC Short Header packet: first_byte=0x40
-Trying to connect to node3 (172.25.2.12 port 443)
-Looking up QUIC connection for node node3 at address 172.25.2.12 port 443 (sa_family=2)
-Found existing QUIC connection for node node3
-QUIC connection to node3 already exists, reusing
 Trying to connect to node1 (172.25.1.10 port 443)
 Looking up QUIC connection for node node1 at address 172.25.1.10 port 443 (sa_family=2)
 Found existing QUIC connection for node node1
 QUIC connection to node1 already exists, reusing
+Trying to connect to node3 (172.25.2.12 port 443)
+Looking up QUIC connection for node node3 at address 172.25.2.12 port 443 (sa_family=2)
+Found existing QUIC connection for node node3
+QUIC connection to node3 already exists, reusing
 Connection from localhost port unix
-receive_request: conn=0x5e27368183e0 quic_meta=0 allow=0 raw='0 ^1A58F7A4CFBEB0691E2A817ABE24EDFCE4CA83BB1CC16ABBD1E6FC5895EF95E8 0'
-Got ID from <control> (localhost port unix): 0 ^1A58F7A4CFBEB0691E2A817ABE24EDFCE4CA83BB1CC16ABBD1E6FC5895EF95E8 0
+receive_request: conn=0x648c0ae173e0 quic_meta=0 allow=0 raw='0 ^B0B2003D3161AAE249BDF61FD5F37A790EDD94975046C50A926517AC04A7B714 0'
+Got ID from <control> (localhost port unix): 0 ^B0B2003D3161AAE249BDF61FD5F37A790EDD94975046C50A926517AC04A7B714 0
 Sending ID to <control> (localhost port unix): 0 node2 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x5e27368183e0 quic_meta=0 allow=18 raw='18 3'
+receive_request: conn=0x648c0ae173e0 quic_meta=0 allow=18 raw='18 3'
 Got CONTROL from <control> (localhost port unix): 18 3
 Sending CONTROL to <control> (localhost port unix): 18 3 node1 79ae6db0921b unknown port unknown 0 0 0 0 0 800 - - 0 1518 0 1518 0 -1 0 0 0 0
 Sending 90 bytes of metadata to <control> (localhost port unix)
-Sending CONTROL to <control> (localhost port unix): 18 3 node2 641dda6330a1 MYSELF port 443 0 0 0 0 700000c 850 node2 node2 0 1518 0 1518 1762899791 -1 6 516 4 504
+Sending CONTROL to <control> (localhost port unix): 18 3 node2 641dda6330a1 MYSELF port 443 0 0 0 0 700000c 850 node2 node2 0 1518 0 1518 1762902015 -1 6 516 4 504
 Sending 112 bytes of metadata to <control> (localhost port unix)
 Sending CONTROL to <control> (localhost port unix): 18 3 node3 50a8891922e7 unknown port unknown 0 0 0 0 0 800 - - 0 1518 0 1518 0 -1 0 0 0 0
 Sending 90 bytes of metadata to <control> (localhost port unix)
@@ -971,14 +964,14 @@ Sending 5 bytes of metadata to <control> (localhost port unix)
 Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 Connection from localhost port unix
-receive_request: conn=0x5e27368183e0 quic_meta=0 allow=0 raw='0 ^1A58F7A4CFBEB0691E2A817ABE24EDFCE4CA83BB1CC16ABBD1E6FC5895EF95E8 0'
-Got ID from <control> (localhost port unix): 0 ^1A58F7A4CFBEB0691E2A817ABE24EDFCE4CA83BB1CC16ABBD1E6FC5895EF95E8 0
+receive_request: conn=0x648c0ae173e0 quic_meta=0 allow=0 raw='0 ^B0B2003D3161AAE249BDF61FD5F37A790EDD94975046C50A926517AC04A7B714 0'
+Got ID from <control> (localhost port unix): 0 ^B0B2003D3161AAE249BDF61FD5F37A790EDD94975046C50A926517AC04A7B714 0
 Sending ID to <control> (localhost port unix): 0 node2 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x5e27368183e0 quic_meta=0 allow=18 raw='18 6'
+receive_request: conn=0x648c0ae173e0 quic_meta=0 allow=18 raw='18 6'
 Got CONTROL from <control> (localhost port unix): 18 6
 Sending CONTROL to <control> (localhost port unix): 18 6 (null) 172.25.1.10 port 443 0 0 180000
 Sending 44 bytes of metadata to <control> (localhost port unix)
@@ -989,14 +982,14 @@ Sending 5 bytes of metadata to <control> (localhost port unix)
 Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 Connection from localhost port unix
-receive_request: conn=0x5e27368183e0 quic_meta=0 allow=0 raw='0 ^1A58F7A4CFBEB0691E2A817ABE24EDFCE4CA83BB1CC16ABBD1E6FC5895EF95E8 0'
-Got ID from <control> (localhost port unix): 0 ^1A58F7A4CFBEB0691E2A817ABE24EDFCE4CA83BB1CC16ABBD1E6FC5895EF95E8 0
+receive_request: conn=0x648c0ae173e0 quic_meta=0 allow=0 raw='0 ^B0B2003D3161AAE249BDF61FD5F37A790EDD94975046C50A926517AC04A7B714 0'
+Got ID from <control> (localhost port unix): 0 ^B0B2003D3161AAE249BDF61FD5F37A790EDD94975046C50A926517AC04A7B714 0
 Sending ID to <control> (localhost port unix): 0 node2 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x5e27368183e0 quic_meta=0 allow=18 raw='18 4'
+receive_request: conn=0x648c0ae173e0 quic_meta=0 allow=18 raw='18 4'
 Got CONTROL from <control> (localhost port unix): 18 4
 Sending CONTROL to <control> (localhost port unix): 18 4
 Sending 5 bytes of metadata to <control> (localhost port unix)
@@ -1004,24 +997,25 @@ Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 
 === NODE3 FULL LOG ===
-Stream 0 peek result: -7 (QUICHE_ERR_DONE=-1)
-quiche_conn_readable returned non-NULL
-quiche_stream_iter_next returned false - no readable streams
-quic_transport_is_enabled() = 1 (quic_manager=0x5a65caaa8750, enabled=1)
+Found unbound connection for peer: hostname=172.25.2.10 port 443, quic_stream_id=-1
+Assigned stream 0 to unbound peer 172.25.2.10 port 443 (clients always use stream 0)
+Processing metadata for unbound connection
+QUIC meta-connection without node (unbound), looking up by address
+quic_transport_is_enabled() = 1 (quic_manager=0x599e41cf1750, enabled=1)
 Detected QUIC Long Header packet: first_byte=0xe0
-quic_transport_is_enabled() = 1 (quic_manager=0x5a65caaa8750, enabled=1)
+quic_transport_is_enabled() = 1 (quic_manager=0x599e41cf1750, enabled=1)
 QUIC demux: received UDP len=52 from 172.25.2.10:443
 Parsed QUIC header: type=5 version=0x0 DCID=<empty> (len=0) SCID=<empty> (len=0)
 TRACE after parse: scid=<empty> scid_len=0
 Found connection by peer address fallback
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db rx pkt Short dcid=64fddc387a4be83a9bb933f369d895db key_phase=false len=35 pn=4 
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db rx frm STREAM id=0 off=0 len=13 fin=false
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db tx pkt Short dcid=666faee85e8ed044c8b77c2874c37c37 key_phase=false len=5 pn=4 
-quiche: quiche: 64fddc387a4be83a9bb933f369d895db tx frm ACK delay=16 blocks=[4..4] ecn_counts=None
-quiche: quiche::recovery::congestion::recovery: 64fddc387a4be83a9bb933f369d895db timer=57.74527ms latest_rtt=15.901002ms srtt=15.490702ms min_rtt=15.469028ms rttvar=4.391911ms cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, first_sent_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, end_of_app_limited: 2, last_sent_packet: 4, largest_acked: 2, rate_sample: RateSample { bandwidth: 811.86 Kbps, is_app_limited: true, interval: 16.002782ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 755555, tv_nsec: 466436523 }), send_elapsed: 101.78µs, ack_elapsed: 16.002782ms, rtt: 15.901002ms } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 1089363, last_update: Instant { tv_sec: 755555, tv_nsec: 482857899 }, next_time: Instant { tv_sec: 755555, tv_nsec: 482554673 }, max_datagram_size: 1350, last_packet_size: None, iv: 399.3
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] send: 39 bytes to 172.25.2.10:443 via fd=6 (first=0x47)
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] sendto OK: 39 bytes
-QUIC[3634666464633338376134626538336139626239333366333639643839356462] sent 1 packets, 39 bytes total
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c rx pkt Short dcid=e52c887cf73050c176b4a1c6cd3da60c key_phase=false len=35 pn=4 
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c rx frm STREAM id=0 off=0 len=13 fin=false
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c tx pkt Short dcid=0389c61fe8ee458888db91761805bbfa key_phase=false len=5 pn=4 
+quiche: quiche: e52c887cf73050c176b4a1c6cd3da60c tx frm ACK delay=30 blocks=[4..4] ecn_counts=None
+quiche: quiche::recovery::congestion::recovery: e52c887cf73050c176b4a1c6cd3da60c timer=25.727489ms latest_rtt=893.827µs srtt=737.713µs min_rtt=713.261µs rttvar=248.433µs cwnd=13500 ssthresh=18446744073709551615 bytes_in_flight=435 app_limited=true congestion_recovery_start_time=None Rate { delivered: 1624, delivered_time: Instant { tv_sec: 757749, tv_nsec: 950082533 }, first_sent_time: Instant { tv_sec: 757749, tv_nsec: 950082533 }, end_of_app_limited: 2, last_sent_packet: 4, largest_acked: 2, rate_sample: RateSample { bandwidth: 13.14 Mbps, is_app_limited: true, interval: 1.041385ms, delivered: 1624, prior_delivered: 0, prior_time: Some(Instant { tv_sec: 757749, tv_nsec: 948956562 }), send_elapsed: 147.558µs, ack_elapsed: 1.041385ms, rtt: 893.827µs } } pacer=Pacer { enabled: true, capacity: 13500, used: 0, rate: 22874749, last_update: Instant { tv_sec: 757749, tv_nsec: 951074696 }, next_time: Instant { tv_sec: 757749, tv_nsec: 951074696 }, max_datagram_size: 1350, last_packet_size: Some(0), iv: 0ns, m
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] send: 39 bytes to 172.25.2.10:443 via fd=6 (first=0x4d)
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] sendto OK: 39 bytes
+QUIC[6535326338383763663733303530633137366234613163366364336461363063] sent 1 packets, 39 bytes total
 Server connection established from 172.25.2.10 port 443 (family=2), attempting to bind node
   Checking node 'node1': addr=unspec port unspec family=0
   Checking node 'node2': addr=unspec port unspec family=0
@@ -1034,12 +1028,11 @@ QUIC packet processed: qconn->node=(nil)
 find_unbound: looking for connection from 172.25.2.10 port 443
   [1] c->hostname=172.25.2.10 port 443 quic_meta=1 node=(nil)
 find_unbound: FOUND match for 172.25.2.10 port 443
-Found unbound connection for peer: hostname=172.25.2.10 port 443, quic_stream_id=-1
-Attempting stream discovery for unbound peer 172.25.2.10 port 443
-Stream 0 peek result: -1 (QUICHE_ERR_DONE=-1)
-quiche_conn_readable returned non-NULL
-quiche_stream_iter_next returned false - no readable streams
-quic_transport_is_enabled() = 1 (quic_manager=0x5a65caaa8750, enabled=1)
+Found unbound connection for peer: hostname=172.25.2.10 port 443, quic_stream_id=0
+Unbound connection already has stream_id=0
+Processing metadata for unbound connection
+QUIC meta-connection without node (unbound), looking up by address
+quic_transport_is_enabled() = 1 (quic_manager=0x599e41cf1750, enabled=1)
 Detected QUIC Short Header packet: first_byte=0x40
 Read packet of 98 bytes from Linux tun/tap device (tun mode)
 Cannot route packet from node3 (MYSELF port 443): unknown IPv4 destination address 10.0.0.2
@@ -1053,34 +1046,34 @@ Looking up QUIC connection for node node1 at address 172.25.2.10 port 443 (sa_fa
 Found existing QUIC connection for node node1
 QUIC connection to node1 already exists, reusing
 Connection from localhost port unix
-receive_request: conn=0x5a65cab16370 quic_meta=0 allow=0 raw='0 ^86E4B7A282E41BDC5CDD2C0AFBA534A2E735960A58364D6FB1DF307CE438382A 0'
-Got ID from <control> (localhost port unix): 0 ^86E4B7A282E41BDC5CDD2C0AFBA534A2E735960A58364D6FB1DF307CE438382A 0
+receive_request: conn=0x599e41d5f370 quic_meta=0 allow=0 raw='0 ^8A26080ECDB3EC1DE9FE5C2B60F98FFF9001B6289E6BFE508F07EC5800ED9185 0'
+Got ID from <control> (localhost port unix): 0 ^8A26080ECDB3EC1DE9FE5C2B60F98FFF9001B6289E6BFE508F07EC5800ED9185 0
 Sending ID to <control> (localhost port unix): 0 node3 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x5a65cab16370 quic_meta=0 allow=18 raw='18 3'
+receive_request: conn=0x599e41d5f370 quic_meta=0 allow=18 raw='18 3'
 Got CONTROL from <control> (localhost port unix): 18 3
 Sending CONTROL to <control> (localhost port unix): 18 3 node1 79ae6db0921b unknown port unknown 0 0 0 0 0 800 - - 0 1518 0 1518 0 -1 0 0 0 0
 Sending 90 bytes of metadata to <control> (localhost port unix)
 Sending CONTROL to <control> (localhost port unix): 18 3 node2 641dda6330a1 unknown port unknown 0 0 0 0 0 800 - - 0 1518 0 1518 0 -1 0 0 0 0
 Sending 90 bytes of metadata to <control> (localhost port unix)
-Sending CONTROL to <control> (localhost port unix): 18 3 node3 50a8891922e7 MYSELF port 443 0 0 0 0 700000c 850 node3 node3 0 1518 0 1518 1762899791 -1 6 516 4 504
+Sending CONTROL to <control> (localhost port unix): 18 3 node3 50a8891922e7 MYSELF port 443 0 0 0 0 700000c 850 node3 node3 0 1518 0 1518 1762902015 -1 6 516 4 504
 Sending 112 bytes of metadata to <control> (localhost port unix)
 Sending CONTROL to <control> (localhost port unix): 18 3
 Sending 5 bytes of metadata to <control> (localhost port unix)
 Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 Connection from localhost port unix
-receive_request: conn=0x5a65cab16370 quic_meta=0 allow=0 raw='0 ^86E4B7A282E41BDC5CDD2C0AFBA534A2E735960A58364D6FB1DF307CE438382A 0'
-Got ID from <control> (localhost port unix): 0 ^86E4B7A282E41BDC5CDD2C0AFBA534A2E735960A58364D6FB1DF307CE438382A 0
+receive_request: conn=0x599e41d5f370 quic_meta=0 allow=0 raw='0 ^8A26080ECDB3EC1DE9FE5C2B60F98FFF9001B6289E6BFE508F07EC5800ED9185 0'
+Got ID from <control> (localhost port unix): 0 ^8A26080ECDB3EC1DE9FE5C2B60F98FFF9001B6289E6BFE508F07EC5800ED9185 0
 Sending ID to <control> (localhost port unix): 0 node3 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x5a65cab16370 quic_meta=0 allow=18 raw='18 6'
+receive_request: conn=0x599e41d5f370 quic_meta=0 allow=18 raw='18 6'
 Got CONTROL from <control> (localhost port unix): 18 6
 Sending CONTROL to <control> (localhost port unix): 18 6 (null) 172.25.2.10 port 443 0 0 180000
 Sending 44 bytes of metadata to <control> (localhost port unix)
@@ -1091,14 +1084,14 @@ Sending 5 bytes of metadata to <control> (localhost port unix)
 Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 Connection from localhost port unix
-receive_request: conn=0x5a65cab16370 quic_meta=0 allow=0 raw='0 ^86E4B7A282E41BDC5CDD2C0AFBA534A2E735960A58364D6FB1DF307CE438382A 0'
-Got ID from <control> (localhost port unix): 0 ^86E4B7A282E41BDC5CDD2C0AFBA534A2E735960A58364D6FB1DF307CE438382A 0
+receive_request: conn=0x599e41d5f370 quic_meta=0 allow=0 raw='0 ^8A26080ECDB3EC1DE9FE5C2B60F98FFF9001B6289E6BFE508F07EC5800ED9185 0'
+Got ID from <control> (localhost port unix): 0 ^8A26080ECDB3EC1DE9FE5C2B60F98FFF9001B6289E6BFE508F07EC5800ED9185 0
 Sending ID to <control> (localhost port unix): 0 node3 17.7
 Sending 13 bytes of raw metadata to <control> (localhost port unix)
 send_id: node=<control> host=localhost port unix quic_meta=0 ok=1
 Sending ACK to <control> (localhost port unix): 4 0 1
 Sending 6 bytes of metadata to <control> (localhost port unix)
-receive_request: conn=0x5a65cab16370 quic_meta=0 allow=18 raw='18 4'
+receive_request: conn=0x599e41d5f370 quic_meta=0 allow=18 raw='18 4'
 Got CONTROL from <control> (localhost port unix): 18 4
 Sending CONTROL to <control> (localhost port unix): 18 4
 Sending 5 bytes of metadata to <control> (localhost port unix)
@@ -1106,5 +1099,5 @@ Connection closed by <control> (localhost port unix)
 Closing connection with <control> (localhost port unix)
 
 ===========================================
-TEST COMPLETED - Wed Nov 12 01:23:21 MSK 2025
+TEST COMPLETED - Wed Nov 12 02:00:26 MSK 2025
 ===========================================
