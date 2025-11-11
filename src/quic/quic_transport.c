@@ -1580,13 +1580,23 @@ static void quic_flush_meta_outbuf(connection_t *c, quic_conn_t *qconn) {
     if(c->quic_stream_id < 0) return;
     ssize_t outlen = 0;
     if(c->outbuf.len > c->outbuf.offset) {
-        logger(DEBUG_META, LOG_DEBUG, "QUIC meta: flushing %d bytes from outbuf via stream %ld",
-               c->outbuf.len - c->outbuf.offset, (long)c->quic_stream_id);
+        logger(DEBUG_META, LOG_INFO, "QUIC meta: flushing %d bytes from outbuf via stream %ld (handshake_complete=%d)",
+               c->outbuf.len - c->outbuf.offset, (long)c->quic_stream_id, qconn->handshake_complete);
         outlen = quic_meta_send(qconn, c->quic_stream_id,
                                 (const uint8_t *)(c->outbuf.data + c->outbuf.offset),
                                 c->outbuf.len - c->outbuf.offset);
         if(outlen > 0) {
+            logger(DEBUG_META, LOG_INFO, "QUIC meta: sent %zd bytes on stream %ld, calling quic_conn_send",
+                   outlen, (long)c->quic_stream_id);
             buffer_read(&c->outbuf, outlen);
+            /* Actually send the QUIC packets containing stream data */
+            while(true) {
+                ssize_t sent = quic_conn_send(qconn);
+                if(sent <= 0) break;
+            }
+        } else {
+            logger(DEBUG_META, LOG_WARNING, "QUIC meta: quic_meta_send returned %zd for stream %ld",
+                   outlen, (long)c->quic_stream_id);
         }
     }
 }
