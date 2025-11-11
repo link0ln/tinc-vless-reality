@@ -1219,13 +1219,14 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                     } else {
                         logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unbound connection already has stream_id=%ld", (long)uc->quic_stream_id);
                     }
+
+                    /* For unbound connections, process metadata through receive_meta()
+                     * which will handle reading and parsing the ID message */
                     if(uc->quic_stream_id >= 0) {
-                        bool is_readable = quic_meta_stream_readable(qconn, uc->quic_stream_id);
-                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Stream %ld readable status: %d", (long)uc->quic_stream_id, is_readable);
-                        if(is_readable) {
-                            logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing meta for unbound peer on stream %ld",
-                                   (long)uc->quic_stream_id);
-                            receive_meta(uc);
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing metadata for unbound connection");
+                        /* receive_meta() now handles unbound connections by looking up qconn by address */
+                        if(!receive_meta(uc)) {
+                            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process metadata from unbound connection");
                         }
                     }
                 } else {
