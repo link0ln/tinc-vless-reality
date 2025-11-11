@@ -301,15 +301,20 @@ static quic_conn_t *lookup_connection_by_id(const uint8_t *conn_id, size_t conn_
 
 /* Initialize QUIC transport */
 bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
+	logger(DEBUG_ALWAYS, LOG_INFO, "quic_transport_init called: sockets=%p, num_sockets=%d", (void*)sockets, num_sockets);
+
 	if(!quic_init()) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to initialize QUIC subsystem");
+		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to initialize QUIC subsystem (quic_init returned false)");
 		return false;
 	}
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC subsystem (quiche) initialized successfully");
 
 	if(!sockets || num_sockets <= 0) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "No listen sockets provided for QUIC");
+		logger(DEBUG_ALWAYS, LOG_ERR, "No listen sockets provided for QUIC (sockets=%p, num_sockets=%d)",
+		       (void*)sockets, num_sockets);
 		return false;
 	}
+	logger(DEBUG_ALWAYS, LOG_INFO, "Listen sockets validated: %d sockets available", num_sockets);
 
 	quic_manager = xzalloc(sizeof(quic_manager_t));
 
@@ -365,8 +370,12 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
 	snprintf(cert_path, sizeof(cert_path), "%s/quic-cert.pem", confbase);
 	snprintf(key_path, sizeof(key_path), "%s/quic-key.pem", confbase);
 
+	logger(DEBUG_ALWAYS, LOG_INFO, "Loading QUIC TLS certificates: cert=%s, key=%s", cert_path, key_path);
+
 	if(!quic_config_set_tls_cert(quic_manager->server_config, cert_path, key_path)) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to load TLS certificate for QUIC server");
+		logger(DEBUG_ALWAYS, LOG_ERR, "Cert path: %s", cert_path);
+		logger(DEBUG_ALWAYS, LOG_ERR, "Key path: %s", key_path);
 		logger(DEBUG_ALWAYS, LOG_ERR, "Certificate should be generated at startup by entrypoint script");
 		quic_config_free(quic_manager->server_config);
 		quic_config_free(quic_manager->client_config);
@@ -375,6 +384,8 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
 		quic_manager = NULL;
 		return false;
 	}
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC TLS certificates loaded successfully");
 
     quic_manager->initialized = true;
     quic_manager->enabled = true;
