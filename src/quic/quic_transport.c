@@ -1001,9 +1001,21 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						/* Add to connection list - will be linked to node when ID message arrives */
 						connection_add(c);
 
-                    /* Initiate metadata protocol to receive ID message */
+                    /* Link connection to qconn for metadata exchange */
+                    quic_conn_set_connection(qconn, c);
+
+                    /* Initiate metadata protocol: both send and receive ID */
                     c->allow_request = ID;
-                    /* Do not send raw metadata before we know peer's identity */
+                    c->status.meta_protocol_initiated = 1;
+
+                    /* Server sends ID first, then waits for client ID */
+                    if(!send_id(c)) {
+                        logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to send ID to incoming QUIC from %s", c->hostname);
+                    } else {
+                        logger(DEBUG_PROTOCOL, LOG_INFO, "Sent ID to incoming QUIC from %s, now waiting for peer ID", c->hostname);
+                        /* Flush the ID message immediately */
+                        quic_flush_meta_outbuf(c, qconn);
+                    }
 
 						logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for unbound incoming QUIC from %s, waiting for ID message",
 						       c->hostname);
