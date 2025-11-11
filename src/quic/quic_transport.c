@@ -985,8 +985,13 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 				}
 
 				if(!qconn->node) {
-                    logger(DEBUG_PROTOCOL, LOG_INFO, "Could not find node for server connection from %s - will bind via ID message",
-                           sockaddr2hostname((sockaddr_t *)&qconn->peer_addr));
+                    /* Check if an unbound connection already exists for this peer */
+                    connection_t *existing = find_unbound_quic_meta_for_peer(qconn);
+                    if(existing) {
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unbound connection already exists for %s, skipping duplicate creation", existing->hostname);
+                    } else {
+                        logger(DEBUG_PROTOCOL, LOG_INFO, "Could not find node for server connection from %s - will bind via ID message",
+                               sockaddr2hostname((sockaddr_t *)&qconn->peer_addr));
 
                     /* Hybrid binding: Create connection_t for incoming connection and keep name unset
                      * so send_id() uses our proper name toward the peer. */
@@ -1022,6 +1027,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 
 					logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for unbound incoming QUIC from %s, waiting for client stream and ID message",
 					       c->hostname);
+                    }
 				}
 			}
 
