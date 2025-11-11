@@ -1834,16 +1834,17 @@ void handle_incoming_vpn_data(void *data, int flags) {
 			continue;
 		}
 
-		/* Packet demultiplexing: check if this is a QUIC packet */
-		if(quic_transport_is_enabled() && is_quic_packet(DATA(&pkt[i]), pkt[i].len)) {
-			/* Route to QUIC transport handler */
-			socklen_t addrlen = msg[i].msg_hdr.msg_namelen;
-			quic_transport_handle_packet(DATA(&pkt[i]), pkt[i].len,
-			                              (struct sockaddr *)&addr[i].sa, addrlen);
-		} else {
-			/* Route to native tinc packet handler */
-			handle_incoming_vpn_packet(ls, &pkt[i], &addr[i]);
-		}
+        /* In QUIC modes, let transport parse packet first; it will ignore non-QUIC */
+        if(quic_transport_is_enabled()) {
+            socklen_t addrlen = msg[i].msg_hdr.msg_namelen;
+            quic_transport_handle_packet(DATA(&pkt[i]), pkt[i].len,
+                                          (struct sockaddr *)&addr[i].sa, addrlen);
+        }
+        /* Route to native tinc packet handler */
+        if(!quic_transport_is_enabled() || !is_quic_packet(DATA(&pkt[i]), pkt[i].len)) {
+            /* Route to native tinc packet handler */
+            handle_incoming_vpn_packet(ls, &pkt[i], &addr[i]);
+        }
 	}
 
 #else
@@ -1865,14 +1866,14 @@ void handle_incoming_vpn_data(void *data, int flags) {
 
         pkt.len = len;
 
-        /* Packet demultiplexing: check if this is a QUIC packet */
-        if(quic_transport_is_enabled() && is_quic_packet(DATA(&pkt), pkt.len)) {
-            /* Route to QUIC transport handler */
-            quic_transport_handle_packet(DATA(&pkt), pkt.len, &addr.sa, addrlen);
-        } else {
-            /* Route to native tinc packet handler */
-            handle_incoming_vpn_packet(ls, &pkt, &addr);
-        }
+    /* In QUIC modes, let transport parse packet first; it will ignore non-QUIC */
+    if(quic_transport_is_enabled()) {
+        quic_transport_handle_packet(DATA(&pkt), pkt.len, &addr.sa, addrlen);
+    }
+    /* Route to native tinc packet handler only if not QUIC or not QUIC packet */
+    if(!quic_transport_is_enabled() || !is_quic_packet(DATA(&pkt), pkt.len)) {
+        handle_incoming_vpn_packet(ls, &pkt, &addr);
+    }
     }
 #endif
 }

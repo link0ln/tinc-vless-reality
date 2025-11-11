@@ -173,6 +173,10 @@ bool send_id(connection_t *c) {
 			return false;
 		}
 
+    /* If connection name is unset (incoming QUIC server-side before binding), set it to ourselves */
+    if(!c->name) {
+        c->name = xstrdup(myself->connection->name);
+    }
     bool ok = send_request(c, "%d %s %d.%d", ID, myself->connection->name, myself->connection->protocol_major, minor);
     logger(DEBUG_PROTOCOL, LOG_INFO, "send_id: node=%s host=%s quic_meta=%d ok=%d",
            c->name ? c->name : "(nil)", c->hostname ? c->hostname : "(nil)", c->status.quic_meta, ok);
@@ -514,22 +518,19 @@ bool id_h(connection_t *c, const char *request) {
     c->allow_request = METAKEY;
 
     if(!c->outgoing) {
-        /* Immediate ACK only if QUIC meta actually active on this connection */
-        if(c->status.quic_meta) {
+        /* Immediate ACK only if QUIC meta active AND stream ready */
+        if(c->status.quic_meta && c->quic_stream_id >= 0) {
             c->allow_request = ACK;
-            logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC meta: sending immediate ACK to %s", c->name);
+            logger(DEBUG_PROTOCOL, LOG_INFO, "QUIC meta: sending immediate ACK to %s on stream %ld", c->name, (long)c->quic_stream_id);
             if(!send_ack(c)) {
-                logger(DEBUG_PROTOCOL, LOG_WARNING, "Immediate ACK failed for %s, falling back to normal handshake", c->name);
-                /* Fall back to normal path */
-                send_id(c);
+                logger(DEBUG_PROTOCOL, LOG_WARNING, "Immediate ACK failed for %s, deferring to transport", c->name);
             } else {
-                /* Flush ACK over QUIC meta stream immediately */
                 extern void quic_transport_flush_meta(connection_t *c);
                 quic_transport_flush_meta(c);
             }
         } else {
-            /* Non-QUIC: proceed with normal handshake */
-            send_id(c);
+            /* Defer ACK until stream is ready; transport will trigger meta once handshake completes */
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "Deferring ACK for %s (quic_meta=%d stream=%ld)", c->name, c->status.quic_meta, (long)c->quic_stream_id);
         }
     }
 

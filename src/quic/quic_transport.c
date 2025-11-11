@@ -45,6 +45,23 @@
 quic_manager_t *quic_manager = NULL;
 static timeout_t quic_timer;
 
+/* Helper: find an existing QUIC meta connection_t without bound node
+ * that matches the given qconn peer address. */
+static connection_t *find_unbound_quic_meta_for_peer(const quic_conn_t *qconn) {
+    if(!qconn) return NULL;
+    for(list_node_t *ln = connection_list ? connection_list->head : NULL; ln; ln = ln->next) {
+        connection_t *c = (connection_t *)ln->data;
+        if(!c) continue;
+        if(!c->status.quic_meta) continue;
+        if(c->node) continue; /* only unbound */
+        /* Match by peer address */
+        if(sockaddrcmp_noport(&c->address, (const sockaddr_t *)&qconn->peer_addr) == 0) {
+            return c;
+        }
+    }
+    return NULL;
+}
+
 static void quic_timeout_handler(void *data) {
     (void)data;
     if(!quic_manager || !quic_manager->connections || !quic_manager->connections->head) {
@@ -455,24 +472,23 @@ void quic_transport_exit(void) {
 /* Helper: Find QUIC connection by peer address only (for incoming connections)
  * Used during node binding when we don't know the node yet */
 quic_conn_t *quic_find_connection_by_address(const sockaddr_t *addr) {
-	if(!quic_manager || !quic_manager->conn_id_map || !addr) {
-		return NULL;
-	}
+    if(!quic_manager || !quic_manager->connections || !addr) {
+        return NULL;
+    }
 
-	/* Iterate through all connections in conn_id_map */
-	for(splay_node_t *node = quic_manager->conn_id_map->head; node; node = node->next) {
-		quic_conn_t *qconn = (quic_conn_t *)node->data;
-		if(!qconn) {
-			continue;
-		}
+    /* Iterate through all live QUIC connections */
+    for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+        quic_conn_t *qconn = (quic_conn_t *)n->data;
+        if(!qconn) {
+            continue;
+        }
+        /* Compare peer addresses ignoring port (we match IP only) */
+        if(sockaddrcmp_noport(addr, (const sockaddr_t *)&qconn->peer_addr) == 0) {
+            return qconn;
+        }
+    }
 
-		/* Compare peer addresses */
-		if(sockaddrcmp_noport(addr, (const sockaddr_t *)&qconn->peer_addr) == 0) {
-			return qconn;
-		}
-	}
-
-	return NULL;
+    return NULL;
 }
 
 /* Get QUIC connection for a node */
@@ -731,9 +747,25 @@ bool quic_transport_send_packet(node_t *node, vpn_packet_t *packet) {
 void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                                    struct sockaddr *from, socklen_t fromlen) {
 
-	if(!quic_manager || !buf || len == 0) {
-		return;
-	}
+    if(!quic_manager || !buf || len == 0) {
+        return;
+    }
+
+    /* Trace incoming UDP for QUIC demux */
+    char src[INET6_ADDRSTRLEN] = {0};
+    int sport = 0;
+    if(from) {
+        if(from->sa_family == AF_INET) {
+            struct sockaddr_in *sin = (struct sockaddr_in *)from;
+            inet_ntop(AF_INET, &sin->sin_addr, src, sizeof(src));
+            sport = ntohs(sin->sin_port);
+        } else if(from->sa_family == AF_INET6) {
+            struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)from;
+            inet_ntop(AF_INET6, &sin6->sin6_addr, src, sizeof(src));
+            sport = ntohs(sin6->sin6_port);
+        }
+    }
+    logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC demux: received UDP len=%zu from %s:%d", len, src[0]?src:"?", sport);
 
     /* Parse QUIC header to get connection ID for demultiplexing */
 	uint8_t type;
@@ -840,10 +872,15 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
     if(qconn) {
         /* Feed packet to connection; loop until quiche reports no more packets to send */
         ssize_t done = quic_conn_recv(qconn, buf, len);
-        
+
         if(done > 0) {
             quic_manager->packets_received++;
             quic_manager->bytes_received += done;
+            /* Proactively send any handshake responses/packets */
+            while(true) {
+                ssize_t sent = quic_conn_send(qconn);
+                if(sent <= 0) break;
+            }
 
         /* Check if we need to bind server connection to node */
 			bool is_established = quic_conn_is_established(qconn);
@@ -933,10 +970,10 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                     logger(DEBUG_PROTOCOL, LOG_INFO, "Could not find node for server connection from %s - will bind via ID message",
                            sockaddr2hostname((sockaddr_t *)&qconn->peer_addr));
 
-					/* Hybrid binding approach: Create connection_t without node for incoming connection
-					 * Node will be bound when ID message is received in id_h() handler */
-					connection_t *c = new_connection();
-					c->name = xstrdup("unknown");  /* Will be updated when ID message arrives */
+                    /* Hybrid binding: Create connection_t for incoming connection and keep name unset
+                     * so send_id() uses our proper name toward the peer. */
+                    connection_t *c = new_connection();
+                    c->name = NULL;
 					c->outcipher = myself->connection->outcipher;
 					c->outdigest = myself->connection->outdigest;
 					c->outmaclength = myself->connection->outmaclength;
@@ -964,9 +1001,9 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						/* Add to connection list - will be linked to node when ID message arrives */
 						connection_add(c);
 
-						/* Initiate metadata protocol to receive ID message */
-						c->allow_request = ID;
-						send_id(c);
+                    /* Initiate metadata protocol to receive ID message */
+                    c->allow_request = ID;
+                    /* Do not send raw metadata before we know peer's identity */
 
 						logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for unbound incoming QUIC from %s, waiting for ID message",
 						       c->hostname);
@@ -1043,7 +1080,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                             }
                         }
 
-                        /* Kick off metadata protocol by sending ID now */
+                        /* Kick off metadata protocol by sending ID now on both sides */
                         c->status.meta_protocol_initiated = 1;
                         if(!send_id(c)) {
                             logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to queue ID for %s", n->name);
@@ -1055,12 +1092,6 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                         quic_conn_t *qc = quic_transport_get_connection(n, NULL);
                         if(qc) {
                             quic_flush_meta_outbuf(c, qc);
-                            /* If stream has readable data (e.g. immediate ACK), process it */
-                            if(quic_meta_stream_readable(qc, c->quic_stream_id)) {
-                                logger(DEBUG_META, LOG_DEBUG, "QUIC meta: stream %ld readable for %s, invoking receive_meta",
-                                       (long)c->quic_stream_id, n->name);
-                                receive_meta(c);
-                            }
                         }
                         /* Continue with normal post-connect processing */
                         finish_connecting(c);
@@ -1103,9 +1134,9 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 			/* Check for meta-connection data (control plane) */
 			node_t *node = (node_t *)qconn->node;
 
-			logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet processed: qconn->node=%p", (void*)node);
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet processed: qconn->node=%p", (void*)node);
 
-			if(node) {
+            if(node) {
 				logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC node found: name=%s, connection=%p",
 				       node->name ? node->name : "NULL", (void*)node->connection);
 
@@ -1148,9 +1179,33 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						}
 					}
 				}
-			} else {
-				logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet has no associated node");
-			}
+            } else {
+                /* Handle unbound server-side meta connection: process readable meta
+                 * so that ID can be received and node binding can proceed. */
+                connection_t *uc = find_unbound_quic_meta_for_peer(qconn);
+                if(uc) {
+                    /* Discover stream if needed */
+                    if(uc->quic_stream_id < 0) {
+                        quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
+                        if(readable) {
+                            uint64_t sid;
+                            if(quiche_stream_iter_next(readable, &sid)) {
+                                uc->quic_stream_id = sid;
+                                logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld for unbound peer",
+                                       (long)sid);
+                            }
+                            quiche_stream_iter_free(readable);
+                        }
+                    }
+                    if(uc->quic_stream_id >= 0 && quic_meta_stream_readable(qconn, uc->quic_stream_id)) {
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing meta for unbound peer on stream %ld",
+                               (long)uc->quic_stream_id);
+                        receive_meta(uc);
+                    }
+                } else {
+                    logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet has no associated node and no unbound meta found");
+                }
+            }
 
 			/* Flush buffered packets if handshake just completed */
 			/* Only flush if we have a bound node (client connections have node set at creation,
@@ -1254,9 +1309,11 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	}
 
     /* Create new server connection */
+    /* Important: pass client's DCID as Original DCID (odcid) to quiche_accept().
+     * Using client's SCID here breaks address validation and stalls handshake. */
     qconn = quic_conn_new_server(quic_manager->server_config->config,
-                                  dcid, dcid_len,  /* Client DCID becomes our DCID */
-                                  scid, scid_len,  /* Client SCID becomes our ODCID */
+                                  dcid, dcid_len,  /* Track client's DCID */
+                                  dcid, dcid_len,  /* ODCID for quiche_accept = client's DCID */
                                   from, fromlen, sock_fd);
 
 	if(!qconn) {
