@@ -1095,7 +1095,8 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                         /* Continue with normal post-connect processing which sends ID */
                         finish_connecting(c);
                         /* Immediately flush ID over QUIC stream after finish_connecting sends it */
-                        quic_conn_t *qc = quic_transport_get_connection(n, NULL);
+                        /* Use connection address since node address may not be populated yet */
+                        quic_conn_t *qc = quic_transport_get_connection(n, &c->address);
                         if(qc) {
                             quic_flush_meta_outbuf(c, qc);
                         }
