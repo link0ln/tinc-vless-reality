@@ -1080,21 +1080,15 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                             }
                         }
 
-                        /* Kick off metadata protocol by sending ID now on both sides */
+                        /* Kick off metadata protocol */
                         c->status.meta_protocol_initiated = 1;
-                        if(!send_id(c)) {
-                            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to queue ID for %s", n->name);
-                        } else {
-                            logger(DEBUG_PROTOCOL, LOG_INFO, "Queued ID for %s on QUIC meta stream %ld",
-                                   n->name, (long)c->quic_stream_id);
-                        }
-                        /* Immediately flush initial ID over QUIC stream */
+                        /* Continue with normal post-connect processing which sends ID */
+                        finish_connecting(c);
+                        /* Immediately flush ID over QUIC stream after finish_connecting sends it */
                         quic_conn_t *qc = quic_transport_get_connection(n, NULL);
                         if(qc) {
                             quic_flush_meta_outbuf(c, qc);
                         }
-                        /* Continue with normal post-connect processing */
-                        finish_connecting(c);
                     }
                 }
 		}
