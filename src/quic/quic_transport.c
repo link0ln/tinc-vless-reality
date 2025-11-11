@@ -1195,23 +1195,38 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                  * so that ID can be received and node binding can proceed. */
                 connection_t *uc = find_unbound_quic_meta_for_peer(qconn);
                 if(uc) {
+                    logger(DEBUG_PROTOCOL, LOG_DEBUG, "Found unbound connection for peer: hostname=%s, quic_stream_id=%ld",
+                           uc->hostname ? uc->hostname : "NULL", (long)uc->quic_stream_id);
                     /* Discover stream if needed */
                     if(uc->quic_stream_id < 0) {
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Attempting stream discovery for unbound peer %s",
+                               uc->hostname ? uc->hostname : "NULL");
                         quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
                         if(readable) {
+                            logger(DEBUG_PROTOCOL, LOG_DEBUG, "quiche_conn_readable returned non-NULL");
                             uint64_t sid;
                             if(quiche_stream_iter_next(readable, &sid)) {
                                 uc->quic_stream_id = sid;
-                                logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld for unbound peer",
-                                       (long)sid);
+                                logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld for unbound peer %s",
+                                       (long)sid, uc->hostname ? uc->hostname : "NULL");
+                            } else {
+                                logger(DEBUG_PROTOCOL, LOG_DEBUG, "quiche_stream_iter_next returned false - no readable streams");
                             }
                             quiche_stream_iter_free(readable);
+                        } else {
+                            logger(DEBUG_PROTOCOL, LOG_DEBUG, "quiche_conn_readable returned NULL for unbound peer");
                         }
+                    } else {
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unbound connection already has stream_id=%ld", (long)uc->quic_stream_id);
                     }
-                    if(uc->quic_stream_id >= 0 && quic_meta_stream_readable(qconn, uc->quic_stream_id)) {
-                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing meta for unbound peer on stream %ld",
-                               (long)uc->quic_stream_id);
-                        receive_meta(uc);
+                    if(uc->quic_stream_id >= 0) {
+                        bool is_readable = quic_meta_stream_readable(qconn, uc->quic_stream_id);
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Stream %ld readable status: %d", (long)uc->quic_stream_id, is_readable);
+                        if(is_readable) {
+                            logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing meta for unbound peer on stream %ld",
+                                   (long)uc->quic_stream_id);
+                            receive_meta(uc);
+                        }
                     }
                 } else {
                     logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet has no associated node and no unbound meta found");
