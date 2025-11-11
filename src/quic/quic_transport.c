@@ -1576,8 +1576,20 @@ int64_t quic_meta_next_readable(quic_conn_t *qconn) {
 }
 /* Helper: flush metadata outbuf over QUIC stream */
 static void quic_flush_meta_outbuf(connection_t *c, quic_conn_t *qconn) {
-    if(!c || !qconn) return;
-    if(c->quic_stream_id < 0) return;
+    logger(DEBUG_META, LOG_INFO, "quic_flush_meta_outbuf called: c=%p qconn=%p", (void *)c, (void *)qconn);
+
+    if(!c || !qconn) {
+        logger(DEBUG_META, LOG_WARNING, "quic_flush_meta_outbuf: NULL parameter (c=%p, qconn=%p)", (void *)c, (void *)qconn);
+        return;
+    }
+
+    logger(DEBUG_META, LOG_INFO, "quic_flush_meta_outbuf: stream_id=%ld", (long)c->quic_stream_id);
+    if(c->quic_stream_id < 0) {
+        logger(DEBUG_META, LOG_WARNING, "quic_flush_meta_outbuf: invalid stream_id=%ld", (long)c->quic_stream_id);
+        return;
+    }
+
+    logger(DEBUG_META, LOG_INFO, "quic_flush_meta_outbuf: outbuf len=%d offset=%d", c->outbuf.len, c->outbuf.offset);
     ssize_t outlen = 0;
     if(c->outbuf.len > c->outbuf.offset) {
         logger(DEBUG_META, LOG_INFO, "QUIC meta: flushing %d bytes from outbuf via stream %ld (handshake_complete=%d)",
@@ -1598,6 +1610,9 @@ static void quic_flush_meta_outbuf(connection_t *c, quic_conn_t *qconn) {
             logger(DEBUG_META, LOG_WARNING, "QUIC meta: quic_meta_send returned %zd for stream %ld",
                    outlen, (long)c->quic_stream_id);
         }
+    } else {
+        logger(DEBUG_META, LOG_WARNING, "quic_flush_meta_outbuf: outbuf empty or already flushed (len=%d, offset=%d)",
+               c->outbuf.len, c->outbuf.offset);
     }
 }
 
