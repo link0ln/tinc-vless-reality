@@ -1210,40 +1210,10 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                            uc->hostname ? uc->hostname : "NULL", (long)uc->quic_stream_id);
                     /* Discover stream if needed */
                     if(uc->quic_stream_id < 0) {
-                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Attempting stream discovery for unbound peer %s",
+                        /* Directly assign stream 0 - clients always use bidirectional stream 0 for metadata */
+                        uc->quic_stream_id = 0;
+                        logger(DEBUG_PROTOCOL, LOG_INFO, "Assigned stream 0 to unbound peer %s (clients always use stream 0)",
                                uc->hostname ? uc->hostname : "NULL");
-
-                        /* First, try to directly read from stream 0 since we know clients use stream 0 */
-                        uint8_t test_buf[1];
-                        bool fin = false;
-                        uint64_t error_code = 0;
-                        ssize_t peek = quiche_conn_stream_recv(qconn->conn, 0, test_buf, 0, &fin, &error_code);
-                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Stream 0 peek result: %zd (QUICHE_ERR_DONE=%d)",
-                               peek, QUICHE_ERR_DONE);
-
-                        if(peek != QUICHE_ERR_DONE && peek != QUICHE_ERR_INVALID_STREAM_STATE) {
-                            /* Stream 0 has data or is valid - use it */
-                            uc->quic_stream_id = 0;
-                            logger(DEBUG_PROTOCOL, LOG_INFO, "Assigned stream 0 to unbound peer %s based on peek",
-                                   uc->hostname ? uc->hostname : "NULL");
-                        } else {
-                            /* Fall back to iterator discovery */
-                            quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
-                            if(readable) {
-                                logger(DEBUG_PROTOCOL, LOG_DEBUG, "quiche_conn_readable returned non-NULL");
-                                uint64_t sid;
-                                if(quiche_stream_iter_next(readable, &sid)) {
-                                    uc->quic_stream_id = sid;
-                                    logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld for unbound peer %s",
-                                           (long)sid, uc->hostname ? uc->hostname : "NULL");
-                                } else {
-                                    logger(DEBUG_PROTOCOL, LOG_DEBUG, "quiche_stream_iter_next returned false - no readable streams");
-                                }
-                                quiche_stream_iter_free(readable);
-                            } else {
-                                logger(DEBUG_PROTOCOL, LOG_DEBUG, "quiche_conn_readable returned NULL for unbound peer");
-                            }
-                        }
                     } else {
                         logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unbound connection already has stream_id=%ld", (long)uc->quic_stream_id);
                     }
