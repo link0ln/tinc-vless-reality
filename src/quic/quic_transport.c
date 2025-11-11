@@ -1001,9 +1001,6 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						/* Add to connection list - will be linked to node when ID message arrives */
 						connection_add(c);
 
-                    /* Link connection to qconn for metadata exchange */
-                    quic_conn_set_connection(qconn, c);
-
                     /* Initiate metadata protocol: both send and receive ID */
                     c->allow_request = ID;
                     c->status.meta_protocol_initiated = 1;
