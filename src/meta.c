@@ -212,17 +212,24 @@ bool receive_meta(connection_t *c) {
 
 	/* QUIC meta-connection receive path */
 	if(c->quic_stream_id >= 0 && c->status.quic_meta) {
-		if(!c->node) {
-			logger(DEBUG_META, LOG_ERR, "QUIC meta-connection without node!");
-			return false;
-		}
+		quic_conn_t *qconn = NULL;
 
-		/* Get QUIC connection */
-		quic_conn_t *qconn = quic_transport_get_connection(c->node, NULL);
-
-		if(!qconn) {
-			logger(DEBUG_META, LOG_ERR, "No QUIC connection for node %s", c->node->name);
-			return false;
+		/* For unbound connections (server-side before ID received), we don't have c->node yet */
+		if(c->node) {
+			/* Normal path: connection is bound to a node */
+			qconn = quic_transport_get_connection(c->node, NULL);
+			if(!qconn) {
+				logger(DEBUG_META, LOG_ERR, "No QUIC connection for node %s", c->node->name);
+				return false;
+			}
+		} else {
+			/* Unbound connection: lookup by connection address */
+			logger(DEBUG_META, LOG_DEBUG, "QUIC meta-connection without node (unbound), looking up by address");
+			qconn = quic_find_connection_by_address(&c->address);
+			if(!qconn) {
+				logger(DEBUG_META, LOG_ERR, "No QUIC connection for unbound connection from %s", c->hostname);
+				return false;
+			}
 		}
 
 		/* Check if stream has data */
@@ -244,8 +251,9 @@ bool receive_meta(connection_t *c) {
 			return true;  /* No data available */
 		}
 
+		const char *conn_name = c->name ? c->name : (c->hostname ? c->hostname : "unknown");
 		logger(DEBUG_META, LOG_DEBUG, "Received %zd bytes from QUIC stream %ld from %s",
-		       inlen, (long)c->quic_stream_id, c->name);
+		       inlen, (long)c->quic_stream_id, conn_name);
 
 		/* Process the data through normal metadata handling below */
 		bufp = inbuf;

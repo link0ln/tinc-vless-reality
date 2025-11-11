@@ -1330,15 +1330,26 @@ bool setup_network(void) {
 	/* Initialize QUIC transport if enabled */
 	transport_mode_t mode = TRANSPORT_UDP;  /* Default to classic UDP */
 	char *transport_mode_str = NULL;
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "Checking for TransportMode configuration...");
+
 	if(get_config_string(lookup_config(config_tree, "TransportMode"), &transport_mode_str)) {
+		logger(DEBUG_ALWAYS, LOG_INFO, "Found TransportMode in config: %s", transport_mode_str);
 		if(!strcasecmp(transport_mode_str, "quic")) {
 			mode = TRANSPORT_QUIC;
+			logger(DEBUG_ALWAYS, LOG_INFO, "Setting transport mode to QUIC");
 		} else if(!strcasecmp(transport_mode_str, "hybrid")) {
 			mode = TRANSPORT_HYBRID;
+			logger(DEBUG_ALWAYS, LOG_INFO, "Setting transport mode to HYBRID");
 		} else if(!strcasecmp(transport_mode_str, "tcp")) {
 			mode = TRANSPORT_TCP;
+			logger(DEBUG_ALWAYS, LOG_INFO, "Setting transport mode to TCP");
+		} else {
+			logger(DEBUG_ALWAYS, LOG_WARNING, "Unknown TransportMode value: %s, using default UDP", transport_mode_str);
 		}
 		free(transport_mode_str);
+	} else {
+		logger(DEBUG_ALWAYS, LOG_INFO, "No TransportMode configured, using default UDP");
 	}
 
 	/* Validate QUIC + TCPonly conflict */
@@ -1362,14 +1373,21 @@ bool setup_network(void) {
 	}
 
 	if(mode == TRANSPORT_QUIC || mode == TRANSPORT_HYBRID) {
+		logger(DEBUG_ALWAYS, LOG_INFO, "Initializing QUIC transport (mode=%d, listen_sockets=%d)...",
+		       mode, listen_sockets);
+
 		/* Pass tinc's existing UDP sockets to QUIC instead of creating separate ones */
 		if(!quic_transport_init(listen_socket, listen_sockets)) {
 			logger(DEBUG_ALWAYS, LOG_ERR, "Failed to initialize QUIC transport");
 			if(mode == TRANSPORT_QUIC) {
+				logger(DEBUG_ALWAYS, LOG_ERR, "QUIC-only mode: aborting setup");
 				return false;  /* Fatal if QUIC-only mode */
 			}
+			logger(DEBUG_ALWAYS, LOG_WARNING, "HYBRID mode: continuing with fallback to UDP");
 			/* Continue with fallback if HYBRID mode */
 		} else {
+			logger(DEBUG_ALWAYS, LOG_INFO, "QUIC transport initialized successfully");
+
 			/* Set transport mode AFTER initialization */
 			quic_transport_set_mode(mode);
 
@@ -1377,6 +1395,8 @@ bool setup_network(void) {
 			 * in handle_incoming_vpn_data(), not via separate socket callback */
 			logger(DEBUG_ALWAYS, LOG_INFO, "QUIC transport will use shared UDP sockets with packet demultiplexing");
 		}
+	} else {
+		logger(DEBUG_ALWAYS, LOG_INFO, "QUIC transport not enabled (mode=%d)", mode);
 	}
 
 	if(!init_control()) {

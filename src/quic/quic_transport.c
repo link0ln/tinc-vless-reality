@@ -48,17 +48,35 @@ static timeout_t quic_timer;
 /* Helper: find an existing QUIC meta connection_t without bound node
  * that matches the given qconn peer address. */
 static connection_t *find_unbound_quic_meta_for_peer(const quic_conn_t *qconn) {
-    if(!qconn) return NULL;
+    if(!qconn) {
+        logger(DEBUG_PROTOCOL, LOG_DEBUG, "find_unbound: qconn is NULL");
+        return NULL;
+    }
+
+    char *peer_host = sockaddr2hostname((const sockaddr_t *)&qconn->peer_addr);
+    logger(DEBUG_PROTOCOL, LOG_DEBUG, "find_unbound: looking for connection from %s", peer_host);
+
+    int count = 0;
     for(list_node_t *ln = connection_list ? connection_list->head : NULL; ln; ln = ln->next) {
         connection_t *c = (connection_t *)ln->data;
-        if(!c) continue;
+        count++;
+        if(!c) {
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "  [%d] c=NULL", count);
+            continue;
+        }
+        logger(DEBUG_PROTOCOL, LOG_DEBUG, "  [%d] c->hostname=%s quic_meta=%d node=%p",
+               count, c->hostname ? c->hostname : "NULL", c->status.quic_meta, (void*)c->node);
         if(!c->status.quic_meta) continue;
         if(c->node) continue; /* only unbound */
         /* Match by peer address */
         if(sockaddrcmp_noport(&c->address, (const sockaddr_t *)&qconn->peer_addr) == 0) {
+            logger(DEBUG_PROTOCOL, LOG_INFO, "find_unbound: FOUND match for %s", peer_host);
+            free(peer_host);
             return c;
         }
     }
+    logger(DEBUG_PROTOCOL, LOG_INFO, "find_unbound: NO match found for %s (checked %d connections)", peer_host, count);
+    free(peer_host);
     return NULL;
 }
 
@@ -283,15 +301,20 @@ static quic_conn_t *lookup_connection_by_id(const uint8_t *conn_id, size_t conn_
 
 /* Initialize QUIC transport */
 bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
+	logger(DEBUG_ALWAYS, LOG_INFO, "quic_transport_init called: sockets=%p, num_sockets=%d", (void*)sockets, num_sockets);
+
 	if(!quic_init()) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to initialize QUIC subsystem");
+		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to initialize QUIC subsystem (quic_init returned false)");
 		return false;
 	}
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC subsystem (quiche) initialized successfully");
 
 	if(!sockets || num_sockets <= 0) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "No listen sockets provided for QUIC");
+		logger(DEBUG_ALWAYS, LOG_ERR, "No listen sockets provided for QUIC (sockets=%p, num_sockets=%d)",
+		       (void*)sockets, num_sockets);
 		return false;
 	}
+	logger(DEBUG_ALWAYS, LOG_INFO, "Listen sockets validated: %d sockets available", num_sockets);
 
 	quic_manager = xzalloc(sizeof(quic_manager_t));
 
@@ -347,8 +370,12 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
 	snprintf(cert_path, sizeof(cert_path), "%s/quic-cert.pem", confbase);
 	snprintf(key_path, sizeof(key_path), "%s/quic-key.pem", confbase);
 
+	logger(DEBUG_ALWAYS, LOG_INFO, "Loading QUIC TLS certificates: cert=%s, key=%s", cert_path, key_path);
+
 	if(!quic_config_set_tls_cert(quic_manager->server_config, cert_path, key_path)) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "Failed to load TLS certificate for QUIC server");
+		logger(DEBUG_ALWAYS, LOG_ERR, "Cert path: %s", cert_path);
+		logger(DEBUG_ALWAYS, LOG_ERR, "Key path: %s", key_path);
 		logger(DEBUG_ALWAYS, LOG_ERR, "Certificate should be generated at startup by entrypoint script");
 		quic_config_free(quic_manager->server_config);
 		quic_config_free(quic_manager->client_config);
@@ -357,6 +384,8 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
 		quic_manager = NULL;
 		return false;
 	}
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC TLS certificates loaded successfully");
 
     quic_manager->initialized = true;
     quic_manager->enabled = true;
@@ -967,8 +996,13 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 				}
 
 				if(!qconn->node) {
-                    logger(DEBUG_PROTOCOL, LOG_INFO, "Could not find node for server connection from %s - will bind via ID message",
-                           sockaddr2hostname((sockaddr_t *)&qconn->peer_addr));
+                    /* Check if an unbound connection already exists for this peer */
+                    connection_t *existing = find_unbound_quic_meta_for_peer(qconn);
+                    if(existing) {
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unbound connection already exists for %s, skipping duplicate creation", existing->hostname);
+                    } else {
+                        logger(DEBUG_PROTOCOL, LOG_INFO, "Could not find node for server connection from %s - will bind via ID message",
+                               sockaddr2hostname((sockaddr_t *)&qconn->peer_addr));
 
                     /* Hybrid binding: Create connection_t for incoming connection and keep name unset
                      * so send_id() uses our proper name toward the peer. */
@@ -990,28 +1024,21 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					c->status.quic_meta = true;
 					c->status.sptps_disabled = true;
 
-					/* Create metadata stream for this unbound connection */
-					int64_t stream_id = quic_meta_create_stream(qconn);
+					/* Server does NOT create its own stream - it will discover client's stream 0
+					 * and use it for bidirectional communication */
+					c->quic_stream_id = -1;  // Will be set when client stream is discovered
 
-					if(stream_id >= 0) {
-						c->quic_stream_id = stream_id;
-						logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC meta stream %ld for unbound incoming connection from %s",
-						       (long)stream_id, c->hostname);
+					/* Add to connection list - will be linked to node when ID message arrives */
+					connection_add(c);
 
-						/* Add to connection list - will be linked to node when ID message arrives */
-						connection_add(c);
+					/* Server waits to receive client's ID on client-initiated stream 0
+					 * Server will respond with its own ID on the same stream */
+					c->allow_request = ID;
+					c->status.meta_protocol_initiated = 0;  // Will be set when stream is discovered
 
-                    /* Initiate metadata protocol to receive ID message */
-                    c->allow_request = ID;
-                    /* Do not send raw metadata before we know peer's identity */
-
-						logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for unbound incoming QUIC from %s, waiting for ID message",
-						       c->hostname);
-					} else {
-						logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create QUIC meta stream for incoming connection from %s",
-						       c->hostname);
-						free_connection(c);
-					}
+					logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for unbound incoming QUIC from %s, waiting for client stream and ID message",
+					       c->hostname);
+                    }
 				}
 			}
 
@@ -1080,21 +1107,16 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                             }
                         }
 
-                        /* Kick off metadata protocol by sending ID now on both sides */
+                        /* Kick off metadata protocol */
                         c->status.meta_protocol_initiated = 1;
-                        if(!send_id(c)) {
-                            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to queue ID for %s", n->name);
-                        } else {
-                            logger(DEBUG_PROTOCOL, LOG_INFO, "Queued ID for %s on QUIC meta stream %ld",
-                                   n->name, (long)c->quic_stream_id);
-                        }
-                        /* Immediately flush initial ID over QUIC stream */
-                        quic_conn_t *qc = quic_transport_get_connection(n, NULL);
+                        /* Continue with normal post-connect processing which sends ID */
+                        finish_connecting(c);
+                        /* Immediately flush ID over QUIC stream after finish_connecting sends it */
+                        /* Use connection address since node address may not be populated yet */
+                        quic_conn_t *qc = quic_transport_get_connection(n, &c->address);
                         if(qc) {
                             quic_flush_meta_outbuf(c, qc);
                         }
-                        /* Continue with normal post-connect processing */
-                        finish_connecting(c);
                     }
                 }
 		}
@@ -1184,23 +1206,26 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                  * so that ID can be received and node binding can proceed. */
                 connection_t *uc = find_unbound_quic_meta_for_peer(qconn);
                 if(uc) {
+                    logger(DEBUG_PROTOCOL, LOG_DEBUG, "Found unbound connection for peer: hostname=%s, quic_stream_id=%ld",
+                           uc->hostname ? uc->hostname : "NULL", (long)uc->quic_stream_id);
                     /* Discover stream if needed */
                     if(uc->quic_stream_id < 0) {
-                        quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
-                        if(readable) {
-                            uint64_t sid;
-                            if(quiche_stream_iter_next(readable, &sid)) {
-                                uc->quic_stream_id = sid;
-                                logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld for unbound peer",
-                                       (long)sid);
-                            }
-                            quiche_stream_iter_free(readable);
-                        }
+                        /* Directly assign stream 0 - clients always use bidirectional stream 0 for metadata */
+                        uc->quic_stream_id = 0;
+                        logger(DEBUG_PROTOCOL, LOG_INFO, "Assigned stream 0 to unbound peer %s (clients always use stream 0)",
+                               uc->hostname ? uc->hostname : "NULL");
+                    } else {
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unbound connection already has stream_id=%ld", (long)uc->quic_stream_id);
                     }
-                    if(uc->quic_stream_id >= 0 && quic_meta_stream_readable(qconn, uc->quic_stream_id)) {
-                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing meta for unbound peer on stream %ld",
-                               (long)uc->quic_stream_id);
-                        receive_meta(uc);
+
+                    /* For unbound connections, process metadata through receive_meta()
+                     * which will handle reading and parsing the ID message */
+                    if(uc->quic_stream_id >= 0) {
+                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing metadata for unbound connection");
+                        /* receive_meta() now handles unbound connections by looking up qconn by address */
+                        if(!receive_meta(uc)) {
+                            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process metadata from unbound connection");
+                        }
                     }
                 } else {
                     logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet has no associated node and no unbound meta found");
