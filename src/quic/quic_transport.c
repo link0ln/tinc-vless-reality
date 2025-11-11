@@ -1236,28 +1236,39 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	}
 
 	/* Before creating new server connection, check if this is a response to existing client connection */
-	/* Extract peer SCID from packet header and try to find client connection by address */
-	if(scid_len > 0 && from) {
+	/* IMPORTANT: Only route packet to client connection if DCID matches our client's SCID
+	 * This prevents routing incoming Initial packets from OTHER clients to OUR client connections */
+	if(scid_len > 0 && dcid_len > 0 && from) {
 		/* Look for client connections that might be waiting for this response */
 		for(splay_node_t *node_iter = quic_manager->connections->head; node_iter; node_iter = node_iter->next) {
 			quic_conn_t *candidate = (quic_conn_t *)node_iter->data;
 			if(candidate && candidate->is_client && candidate->peer_addr.ss_family == from->sa_family) {
-				bool match = false;
+				bool addr_match = false;
 				/* Check if peer address matches (IP only, port may differ) */
 				if(from->sa_family == AF_INET) {
 					struct sockaddr_in *addr1 = (struct sockaddr_in *)&candidate->peer_addr;
 					struct sockaddr_in *addr2 = (struct sockaddr_in *)from;
-					match = (memcmp(&addr1->sin_addr, &addr2->sin_addr, sizeof(addr1->sin_addr)) == 0);
+					addr_match = (memcmp(&addr1->sin_addr, &addr2->sin_addr, sizeof(addr1->sin_addr)) == 0);
 				} else if(from->sa_family == AF_INET6) {
 					struct sockaddr_in6 *addr1 = (struct sockaddr_in6 *)&candidate->peer_addr;
 					struct sockaddr_in6 *addr2 = (struct sockaddr_in6 *)from;
-					match = (memcmp(&addr1->sin6_addr, &addr2->sin6_addr, sizeof(addr1->sin6_addr)) == 0);
+					addr_match = (memcmp(&addr1->sin6_addr, &addr2->sin6_addr, sizeof(addr1->sin6_addr)) == 0);
 				}
 
-				if(match) {
-					/* Found client connection - register peer SCID and route packet */
+				/* Check if DCID in packet matches our client SCID */
+				bool dcid_match = (candidate->scid_len == dcid_len &&
+				                   memcmp(candidate->scid, dcid, dcid_len) == 0);
+
+				logger(DEBUG_PROTOCOL, LOG_DEBUG,
+				       "Client connection candidate: addr_match=%d dcid_match=%d (our_scid=%s packet_dcid=%s)",
+				       addr_match, dcid_match,
+				       format_cid(candidate->scid, candidate->scid_len),
+				       format_cid(dcid, dcid_len));
+
+				if(addr_match && dcid_match) {
+					/* Found matching client connection - this is a response to our Initial */
 					logger(DEBUG_PROTOCOL, LOG_INFO,
-					       "Found existing client connection - registering peer SCID=%s from packet header",
+					       "Found existing client connection by DCID match - registering peer SCID=%s from packet header",
 					       format_cid(scid, scid_len));
 
 					/* Register peer SCID for demultiplexing */
@@ -1270,7 +1281,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						quic_manager->bytes_received += done;
 						logger(DEBUG_PROTOCOL, LOG_INFO,
 						       "Successfully routed packet to existing client connection after peer SCID registration");
-						
+
 						/* Continue with normal packet processing */
 						if(quic_conn_is_established(candidate) && candidate->send_buf_count > 0 && candidate->node) {
 							quic_conn_flush_buffered_packets(candidate);
@@ -1282,6 +1293,11 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						       done);
 					}
 					return;  /* Packet processed, do not create new server connection */
+				} else if(addr_match && !dcid_match) {
+					/* Address matches but DCID doesn't - this is a NEW incoming connection from the same peer
+					 * Continue to create server connection below */
+					logger(DEBUG_PROTOCOL, LOG_INFO,
+					       "Address matches but DCID mismatch - this is a new incoming Initial, will create server connection");
 				}
 			}
 		}
@@ -1560,18 +1576,43 @@ int64_t quic_meta_next_readable(quic_conn_t *qconn) {
 }
 /* Helper: flush metadata outbuf over QUIC stream */
 static void quic_flush_meta_outbuf(connection_t *c, quic_conn_t *qconn) {
-    if(!c || !qconn) return;
-    if(c->quic_stream_id < 0) return;
+    logger(DEBUG_META, LOG_INFO, "quic_flush_meta_outbuf called: c=%p qconn=%p", (void *)c, (void *)qconn);
+
+    if(!c || !qconn) {
+        logger(DEBUG_META, LOG_WARNING, "quic_flush_meta_outbuf: NULL parameter (c=%p, qconn=%p)", (void *)c, (void *)qconn);
+        return;
+    }
+
+    logger(DEBUG_META, LOG_INFO, "quic_flush_meta_outbuf: stream_id=%ld", (long)c->quic_stream_id);
+    if(c->quic_stream_id < 0) {
+        logger(DEBUG_META, LOG_WARNING, "quic_flush_meta_outbuf: invalid stream_id=%ld", (long)c->quic_stream_id);
+        return;
+    }
+
+    logger(DEBUG_META, LOG_INFO, "quic_flush_meta_outbuf: outbuf len=%d offset=%d", c->outbuf.len, c->outbuf.offset);
     ssize_t outlen = 0;
     if(c->outbuf.len > c->outbuf.offset) {
-        logger(DEBUG_META, LOG_DEBUG, "QUIC meta: flushing %d bytes from outbuf via stream %ld",
-               c->outbuf.len - c->outbuf.offset, (long)c->quic_stream_id);
+        logger(DEBUG_META, LOG_INFO, "QUIC meta: flushing %d bytes from outbuf via stream %ld (handshake_complete=%d)",
+               c->outbuf.len - c->outbuf.offset, (long)c->quic_stream_id, qconn->handshake_complete);
         outlen = quic_meta_send(qconn, c->quic_stream_id,
                                 (const uint8_t *)(c->outbuf.data + c->outbuf.offset),
                                 c->outbuf.len - c->outbuf.offset);
         if(outlen > 0) {
+            logger(DEBUG_META, LOG_INFO, "QUIC meta: sent %zd bytes on stream %ld, calling quic_conn_send",
+                   outlen, (long)c->quic_stream_id);
             buffer_read(&c->outbuf, outlen);
+            /* Actually send the QUIC packets containing stream data */
+            while(true) {
+                ssize_t sent = quic_conn_send(qconn);
+                if(sent <= 0) break;
+            }
+        } else {
+            logger(DEBUG_META, LOG_WARNING, "QUIC meta: quic_meta_send returned %zd for stream %ld",
+                   outlen, (long)c->quic_stream_id);
         }
+    } else {
+        logger(DEBUG_META, LOG_WARNING, "quic_flush_meta_outbuf: outbuf empty or already flushed (len=%d, offset=%d)",
+               c->outbuf.len, c->outbuf.offset);
     }
 }
 
