@@ -48,17 +48,35 @@ static timeout_t quic_timer;
 /* Helper: find an existing QUIC meta connection_t without bound node
  * that matches the given qconn peer address. */
 static connection_t *find_unbound_quic_meta_for_peer(const quic_conn_t *qconn) {
-    if(!qconn) return NULL;
+    if(!qconn) {
+        logger(DEBUG_PROTOCOL, LOG_DEBUG, "find_unbound: qconn is NULL");
+        return NULL;
+    }
+
+    char *peer_host = sockaddr2hostname((const sockaddr_t *)&qconn->peer_addr);
+    logger(DEBUG_PROTOCOL, LOG_DEBUG, "find_unbound: looking for connection from %s", peer_host);
+
+    int count = 0;
     for(list_node_t *ln = connection_list ? connection_list->head : NULL; ln; ln = ln->next) {
         connection_t *c = (connection_t *)ln->data;
-        if(!c) continue;
+        count++;
+        if(!c) {
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "  [%d] c=NULL", count);
+            continue;
+        }
+        logger(DEBUG_PROTOCOL, LOG_DEBUG, "  [%d] c->hostname=%s quic_meta=%d node=%p",
+               count, c->hostname ? c->hostname : "NULL", c->status.quic_meta, (void*)c->node);
         if(!c->status.quic_meta) continue;
         if(c->node) continue; /* only unbound */
         /* Match by peer address */
         if(sockaddrcmp_noport(&c->address, (const sockaddr_t *)&qconn->peer_addr) == 0) {
+            logger(DEBUG_PROTOCOL, LOG_INFO, "find_unbound: FOUND match for %s", peer_host);
+            free(peer_host);
             return c;
         }
     }
+    logger(DEBUG_PROTOCOL, LOG_INFO, "find_unbound: NO match found for %s (checked %d connections)", peer_host, count);
+    free(peer_host);
     return NULL;
 }
 
