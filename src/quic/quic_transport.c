@@ -1299,18 +1299,27 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
             } else {
                 /* Handle unbound server-side meta connection: directly process stream 0 data
                  * to receive ID message and bind to node. */
+                logger(DEBUG_PROTOCOL, LOG_INFO, "==> ELSE BLOCK: Handling unbound connection, qconn=%p", (void*)qconn);
 
                 /* Check if stream 0 has readable data */
                 bool fin = false;
                 uint64_t error_code = 0;
                 quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
+                logger(DEBUG_PROTOCOL, LOG_INFO, "==> quiche_conn_readable returned: %p", (void*)readable);
+
                 if(readable) {
                     uint64_t stream_id;
+                    int stream_count = 0;
                     while(quiche_stream_iter_next(readable, &stream_id)) {
+                        stream_count++;
+                        logger(DEBUG_PROTOCOL, LOG_INFO, "==> Found readable stream %lu", (unsigned long)stream_id);
+
                         if(stream_id == 0) {
                             /* Stream 0 has data - read ID message directly */
+                            logger(DEBUG_PROTOCOL, LOG_INFO, "==> Stream 0 found! Attempting to read...");
                             uint8_t buf[2048];
                             ssize_t len = quiche_conn_stream_recv(qconn->conn, stream_id, buf, sizeof(buf), &fin, &error_code);
+                            logger(DEBUG_PROTOCOL, LOG_INFO, "==> quiche_conn_stream_recv returned: len=%zd, error_code=%lu", len, (unsigned long)error_code);
 
                             if(len > 0) {
                                 logger(DEBUG_PROTOCOL, LOG_INFO, "Read %zd bytes from stream 0 for unbound connection", len);
@@ -1338,7 +1347,10 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                             break;
                         }
                     }
+                    logger(DEBUG_PROTOCOL, LOG_INFO, "==> Total readable streams checked: %d", stream_count);
                     quiche_stream_iter_free(readable);
+                } else {
+                    logger(DEBUG_PROTOCOL, LOG_WARNING, "==> quiche_conn_readable() returned NULL for unbound connection");
                 }
             }
 
