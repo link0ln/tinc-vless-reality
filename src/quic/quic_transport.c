@@ -87,7 +87,8 @@ static connection_t *find_unbound_quic_meta_for_peer(const quic_conn_t *qconn) {
     }
 
     char *peer_host = sockaddr2hostname((const sockaddr_t *)&qconn->peer_addr);
-    logger(DEBUG_PROTOCOL, LOG_DEBUG, "find_unbound: looking for connection from %s", peer_host);
+    logger(DEBUG_PROTOCOL, LOG_INFO, "find_unbound: looking for connection from %s (family=%d)",
+           peer_host, qconn->peer_addr.ss_family);
 
     int count = 0;
     for(list_node_t *ln = connection_list ? connection_list->head : NULL; ln; ln = ln->next) {
@@ -97,12 +98,22 @@ static connection_t *find_unbound_quic_meta_for_peer(const quic_conn_t *qconn) {
             logger(DEBUG_PROTOCOL, LOG_DEBUG, "  [%d] c=NULL", count);
             continue;
         }
-        logger(DEBUG_PROTOCOL, LOG_DEBUG, "  [%d] c->hostname=%s quic_meta=%d node=%p",
-               count, c->hostname ? c->hostname : "NULL", c->status.quic_meta, (void*)c->node);
-        if(!c->status.quic_meta) continue;
-        if(c->node) continue; /* only unbound */
+        char *c_host = c->hostname ? c->hostname : "NULL";
+        logger(DEBUG_PROTOCOL, LOG_INFO, "  [%d] c->hostname=%s quic_meta=%d node=%p stream_id=%ld family=%d",
+               count, c_host, c->status.quic_meta, (void*)c->node, (long)c->quic_stream_id,
+               c->address.sa.sa_family);
+        if(!c->status.quic_meta) {
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "    Skipping: not quic_meta");
+            continue;
+        }
+        if(c->node) {
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "    Skipping: already bound");
+            continue;
+        }
         /* Match by peer address */
-        if(sockaddrcmp_noport(&c->address, (const sockaddr_t *)&qconn->peer_addr) == 0) {
+        int cmp_result = sockaddrcmp_noport(&c->address, (const sockaddr_t *)&qconn->peer_addr);
+        logger(DEBUG_PROTOCOL, LOG_INFO, "    Address compare result: %d", cmp_result);
+        if(cmp_result == 0) {
             logger(DEBUG_PROTOCOL, LOG_INFO, "find_unbound: FOUND match for %s", peer_host);
             free(peer_host);
             return c;
