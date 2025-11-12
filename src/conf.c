@@ -59,6 +59,10 @@ int quic_fallback_mode = 2;  /* 0=no, 1=yes, 2=auto (default) */
 /* Disable SPTPS when VLESS is active (avoid double encryption) */
 bool disable_sptps_with_vless = true;
 
+/* QUIC Advanced Settings */
+bool quic_migration_enabled = false;     /* Connection migration disabled by default */
+int quic_hop_interval_ms = 300000;       /* 5 minutes default (300000ms) */
+
 static int config_compare(const config_t *a, const config_t *b) {
 	int result;
 

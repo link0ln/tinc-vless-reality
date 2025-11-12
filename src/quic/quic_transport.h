@@ -55,6 +55,11 @@ typedef struct quic_manager_t {
 	uint64_t bytes_sent;
 	uint64_t bytes_received;
 
+	/* Connection Migration Configuration */
+	bool migration_enabled;          // global migration toggle
+	uint32_t hop_interval_ms;        // migration interval (0 = disabled)
+	struct timeval last_migration;   // last global migration check
+
 	/* State */
 	bool initialized;
 	bool enabled;

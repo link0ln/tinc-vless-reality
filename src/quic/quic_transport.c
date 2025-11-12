@@ -390,8 +390,23 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
     quic_manager->initialized = true;
     quic_manager->enabled = true;
 
+    /* Initialize connection migration settings */
+    quic_manager->migration_enabled = quic_migration_enabled;
+    quic_manager->hop_interval_ms = quic_hop_interval_ms;
+    memset(&quic_manager->last_migration, 0, sizeof(quic_manager->last_migration));
+
+    logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Connection Migration: %s (interval=%ums)",
+           quic_manager->migration_enabled ? "enabled" : "disabled",
+           quic_manager->hop_interval_ms);
+
     /* Start periodic QUIC timeout driver */
     timeout_add(&quic_timer, quic_timeout_handler, &quic_timer, &(struct timeval){0, 10000});
+
+    /* Start connection migration task if enabled */
+    if(quic_manager->migration_enabled && quic_manager->hop_interval_ms > 0) {
+        timeout_add(&migration_timer, quic_migration_task, NULL, &(struct timeval){10, 0});
+        logger(DEBUG_ALWAYS, LOG_INFO, "QUIC migration task started");
+    }
 
 	/* Initialize Reality configuration if enabled */
 	if(vless_reality_enabled) {
@@ -1647,4 +1662,200 @@ void quic_transport_flush_meta(connection_t *c) {
     quic_conn_t *qconn = quic_transport_get_connection(c->node, NULL);
     if(!qconn) return;
     quic_flush_meta_outbuf(c, qconn);
+}
+
+/* ========================================================================
+ * Connection Migration Support (обход UDP throttling)
+ * ======================================================================== */
+
+/* Migration timer */
+static timeout_t migration_timer;
+
+/* Create new UDP socket for migration (random ephemeral port) */
+static int create_migration_socket(int family) {
+    int sock_fd = socket(family, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
+    if(sock_fd < 0) {
+        logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create migration socket: %s", strerror(errno));
+        return -1;
+    }
+
+    /* Bind to ephemeral port (0 = let OS choose) */
+    if(family == AF_INET) {
+        struct sockaddr_in addr = {0};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = INADDR_ANY;
+        addr.sin_port = 0; /* Random port */
+
+        if(bind(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to bind migration socket: %s", strerror(errno));
+            close(sock_fd);
+            return -1;
+        }
+    } else if(family == AF_INET6) {
+        struct sockaddr_in6 addr = {0};
+        addr.sin6_family = AF_INET6;
+        addr.sin6_addr = in6addr_any;
+        addr.sin6_port = 0;
+
+        if(bind(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to bind IPv6 migration socket: %s", strerror(errno));
+            close(sock_fd);
+            return -1;
+        }
+    }
+
+    /* Get assigned port for logging */
+    struct sockaddr_storage local;
+    socklen_t len = sizeof(local);
+    if(getsockname(sock_fd, (struct sockaddr *)&local, &len) == 0) {
+        int port = 0;
+        if(local.ss_family == AF_INET) {
+            port = ntohs(((struct sockaddr_in *)&local)->sin_port);
+        } else if(local.ss_family == AF_INET6) {
+            port = ntohs(((struct sockaddr_in6 *)&local)->sin6_port);
+        }
+        logger(DEBUG_PROTOCOL, LOG_INFO, "Created migration socket fd=%d on ephemeral port %d", sock_fd, port);
+    }
+
+    return sock_fd;
+}
+
+/* Perform connection migration for a single connection */
+static bool migrate_connection(quic_conn_t *qconn) {
+    if(!qconn || !qconn->migration_enabled) {
+        return false;
+    }
+
+    /* Only migrate established connections */
+    if(!quic_conn_is_established(qconn)) {
+        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Skipping migration for non-established connection");
+        return false;
+    }
+
+    /* Determine socket family from peer address */
+    int family = qconn->peer_addr.ss_family;
+    if(family != AF_INET && family != AF_INET6) {
+        logger(DEBUG_PROTOCOL, LOG_WARNING, "Cannot migrate connection with unknown address family %d", family);
+        return false;
+    }
+
+    /* Create new socket on random ephemeral port */
+    int new_fd = create_migration_socket(family);
+    if(new_fd < 0) {
+        logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to create new socket for migration");
+        return false;
+    }
+
+    /* Save old socket for draining period */
+    qconn->old_sock_fd = qconn->sock_fd;
+    gettimeofday(&qconn->old_fd_close_time, NULL);
+    /* Close old socket after 60 seconds (draining period) */
+    qconn->old_fd_close_time.tv_sec += 60;
+
+    /* Switch to new socket */
+    int old_fd = qconn->sock_fd;
+    qconn->sock_fd = new_fd;
+
+    /* Update last migration timestamp */
+    gettimeofday(&qconn->last_migration, NULL);
+
+    /* Send packets to trigger PATH_CHALLENGE/RESPONSE */
+    /* quiche will automatically send PATH_CHALLENGE when it detects address change */
+    while(true) {
+        ssize_t sent = quic_conn_send(qconn);
+        if(sent <= 0) break;
+    }
+
+    node_t *node = (node_t *)qconn->node;
+    logger(DEBUG_PROTOCOL, LOG_INFO, "Connection migrated to new socket: old_fd=%d -> new_fd=%d for node %s",
+           old_fd, new_fd, node ? node->name : "unknown");
+
+    return true;
+}
+
+/* Close old sockets after draining period */
+static void cleanup_old_sockets(void) {
+    if(!quic_manager || !quic_manager->connections) {
+        return;
+    }
+
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
+    for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+        quic_conn_t *qconn = (quic_conn_t *)n->data;
+        if(!qconn || qconn->old_sock_fd < 0) {
+            continue;
+        }
+
+        /* Check if draining period expired */
+        if(now.tv_sec > qconn->old_fd_close_time.tv_sec ||
+           (now.tv_sec == qconn->old_fd_close_time.tv_sec &&
+            now.tv_usec >= qconn->old_fd_close_time.tv_usec)) {
+
+            logger(DEBUG_PROTOCOL, LOG_DEBUG, "Closing drained socket fd=%d after migration", qconn->old_sock_fd);
+            close(qconn->old_sock_fd);
+            qconn->old_sock_fd = -1;
+        }
+    }
+}
+
+/* Periodic migration task */
+static void quic_migration_task(void *data) {
+    (void)data;
+
+    if(!quic_manager || !quic_manager->migration_enabled ||
+       quic_manager->hop_interval_ms == 0) {
+        /* Migration disabled, reschedule check in 10s */
+        timeout_set(&migration_timer, &(struct timeval){10, 0});
+        return;
+    }
+
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
+    /* Check if it's time for migration */
+    uint64_t elapsed_ms = 0;
+    if(quic_manager->last_migration.tv_sec > 0) {
+        elapsed_ms = (now.tv_sec - quic_manager->last_migration.tv_sec) * 1000ULL +
+                     (now.tv_usec - quic_manager->last_migration.tv_usec) / 1000ULL;
+    } else {
+        /* First run, initialize */
+        quic_manager->last_migration = now;
+        elapsed_ms = quic_manager->hop_interval_ms; /* Force migration on first check */
+    }
+
+    if(elapsed_ms >= quic_manager->hop_interval_ms) {
+        logger(DEBUG_PROTOCOL, LOG_INFO, "Starting periodic connection migration (interval=%ums)",
+               quic_manager->hop_interval_ms);
+
+        int migrated = 0;
+        int failed = 0;
+
+        /* Migrate all eligible connections */
+        for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+            quic_conn_t *qconn = (quic_conn_t *)n->data;
+            if(!qconn) continue;
+
+            if(migrate_connection(qconn)) {
+                migrated++;
+            } else if(qconn->migration_enabled && quic_conn_is_established(qconn)) {
+                /* Only count as failure if migration was expected */
+                failed++;
+            }
+        }
+
+        if(migrated > 0 || failed > 0) {
+            logger(DEBUG_PROTOCOL, LOG_INFO, "Migration cycle completed: %d migrated, %d failed",
+                   migrated, failed);
+        }
+
+        quic_manager->last_migration = now;
+    }
+
+    /* Cleanup old sockets */
+    cleanup_old_sockets();
+
+    /* Reschedule (check every 10 seconds, migrate per hop_interval_ms) */
+    timeout_set(&migration_timer, &(struct timeval){10, 0});
 }

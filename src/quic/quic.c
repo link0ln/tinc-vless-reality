@@ -31,6 +31,10 @@
 #include "../crypto.h"
 #include "utils.h"
 
+/* External configuration variables */
+extern bool quic_migration_enabled;
+extern int quic_hop_interval_ms;
+
 /* Forward declaration for quiche debug callback */
 static void quic_dbg_cb(const char *line, void *arg);
 
@@ -136,8 +140,8 @@ quic_config_t *quic_config_new(bool is_server) {
 	/* Set congestion control */
 	quiche_config_set_cc_algorithm(qconf->config, QUICHE_CC_CUBIC);
 
-	/* Disable connection migration for now (TODO: support it later) */
-	quiche_config_set_disable_active_migration(qconf->config, true);
+	/* Connection migration: enable if configured, disable otherwise */
+	quiche_config_set_disable_active_migration(qconf->config, !quic_migration_enabled);
 
     /* Set simple ALPN for internal transport (length-prefixed as required by quiche) */
     static const uint8_t ALPN_TINC[] = "\x04tinc";
@@ -283,7 +287,14 @@ quic_conn_t *quic_conn_new_client(quiche_config *config, const char *server_name
 	qconn->state = QUIC_STATE_HANDSHAKE;
 	qconn->next_stream_id = 0;  // Client-initiated bidirectional streams start at 0
 
-    logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC client connection to %s", server_name);
+	/* Initialize migration state */
+	qconn->migration_enabled = quic_migration_enabled;
+	memset(&qconn->last_migration, 0, sizeof(qconn->last_migration));
+	qconn->old_sock_fd = -1;
+	memset(&qconn->old_fd_close_time, 0, sizeof(qconn->old_fd_close_time));
+
+    logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC client connection to %s (migration=%s)",
+           server_name, qconn->migration_enabled ? "enabled" : "disabled");
 
     /* Proactively send Initial flight */
     for(int i = 0; i < 4; ++i) {
@@ -338,7 +349,14 @@ quic_conn_t *quic_conn_new_server(quiche_config *config, const uint8_t *dcid, si
 	qconn->state = QUIC_STATE_HANDSHAKE;
 	qconn->next_stream_id = 1;  // Server-initiated bidirectional streams start at 1
 
-	logger(DEBUG_PROTOCOL, LOG_INFO, "Accepted QUIC server connection");
+	/* Initialize migration state */
+	qconn->migration_enabled = quic_migration_enabled;
+	memset(&qconn->last_migration, 0, sizeof(qconn->last_migration));
+	qconn->old_sock_fd = -1;
+	memset(&qconn->old_fd_close_time, 0, sizeof(qconn->old_fd_close_time));
+
+	logger(DEBUG_PROTOCOL, LOG_INFO, "Accepted QUIC server connection (migration=%s)",
+	       qconn->migration_enabled ? "enabled" : "disabled");
 
 	return qconn;
 }

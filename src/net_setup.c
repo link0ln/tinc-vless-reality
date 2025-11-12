@@ -1323,6 +1323,19 @@ bool setup_network(void) {
 		}
 	}
 
+	/* QUIC Advanced Settings */
+	get_config_bool(lookup_config(config_tree, "QuicMigrationEnabled"), &quic_migration_enabled);
+
+	int hop_interval_sec = 0;
+	if(get_config_int(lookup_config(config_tree, "QuicHopInterval"), &hop_interval_sec)) {
+		quic_hop_interval_ms = hop_interval_sec * 1000; /* Convert seconds to milliseconds */
+	}
+
+	if(quic_migration_enabled) {
+		logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Connection Migration enabled (hop interval: %d seconds)",
+		       quic_hop_interval_ms / 1000);
+	}
+
 	if(!setup_myself()) {
 		return false;
 	}
