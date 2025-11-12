@@ -1302,6 +1302,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 
                 /* Check if stream 0 has readable data */
                 bool fin = false;
+                uint64_t error_code = 0;
                 quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
                 if(readable) {
                     uint64_t stream_id;
@@ -1309,23 +1310,26 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
                         if(stream_id == 0) {
                             /* Stream 0 has data - read ID message directly */
                             uint8_t buf[2048];
-                            ssize_t len = quiche_conn_stream_recv(qconn->conn, stream_id, buf, sizeof(buf), &fin);
+                            ssize_t len = quiche_conn_stream_recv(qconn->conn, stream_id, buf, sizeof(buf), &fin, &error_code);
 
                             if(len > 0) {
                                 logger(DEBUG_PROTOCOL, LOG_INFO, "Read %zd bytes from stream 0 for unbound connection", len);
 
-                                /* Find or create unbound connection for this peer */
+                                /* Find unbound connection for this peer */
                                 connection_t *uc = find_unbound_quic_meta_for_peer(qconn);
                                 if(uc) {
-                                    /* Process ID message */
-                                    if(len <= (ssize_t)(sizeof(uc->inbuf.data) - uc->inbuf.len)) {
-                                        memcpy(uc->inbuf.data + uc->inbuf.len, buf, len);
-                                        uc->inbuf.len += len;
+                                    /* Copy data to connection buffer */
+                                    buffer_add(&uc->inbuf, (char *)buf, len);
 
-                                        /* Process the buffered data */
-                                        if(!receive_request(uc)) {
+                                    /* Extract and process request line */
+                                    char *request = buffer_readline(&uc->inbuf);
+                                    if(request) {
+                                        logger(DEBUG_PROTOCOL, LOG_INFO, "Processing ID request from unbound connection: %s", request);
+                                        if(!receive_request(uc, request)) {
                                             logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process ID from unbound connection");
                                         }
+                                    } else {
+                                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Incomplete ID message, waiting for more data");
                                     }
                                 } else {
                                     logger(DEBUG_PROTOCOL, LOG_WARNING, "Received stream 0 data but no unbound connection found");
