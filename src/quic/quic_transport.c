@@ -1251,9 +1251,10 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 			/* Check for meta-connection data (control plane) */
 			node_t *node = (node_t *)qconn->node;
 
-            logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet processed: qconn->node=%p", (void*)node);
+            logger(DEBUG_PROTOCOL, LOG_INFO, "###META### QUIC packet processed: qconn->node=%p", (void*)node);
 
             if(node) {
+                logger(DEBUG_PROTOCOL, LOG_INFO, "###META### node IS NOT NULL, entering if(node) block");
 				logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC node found: name=%s, connection=%p",
 				       node->name ? node->name : "NULL", (void*)node->connection);
 
@@ -1297,6 +1298,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					}
 				}
             } else {
+                logger(DEBUG_PROTOCOL, LOG_INFO, "###META### node IS NULL, entering else block");
                 /* Handle unbound server-side meta connection: directly process stream 0 data
                  * to receive ID message and bind to node. */
                 logger(DEBUG_PROTOCOL, LOG_INFO, "==> ELSE BLOCK: Handling unbound connection, qconn=%p", (void*)qconn);
