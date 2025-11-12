@@ -1,0 +1,37 @@
+# Build artifacts
+*.o
+*.lo
+*.la
+*.a
+.libs/
+.deps/
+*.Po
+*.Plo
+
+# Compiled binaries
+src/tincd
+src/tinc
+src/sptps_test
+src/sptps_keypair
+
+# Generated files
+config.h
+config.status
+config.log
+configure
+autom4te.cache/
+Makefile
+Makefile.in
+stamp-h1
+.dirstamp
+
+# Editor files
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Test outputs
+test.log
+*.pcap
