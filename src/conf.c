@@ -63,6 +63,11 @@ bool disable_sptps_with_vless = true;
 bool quic_migration_enabled = false;     /* Connection migration disabled by default */
 int quic_hop_interval_ms = 300000;       /* 5 minutes default (300000ms) */
 
+/* QUIC Retry Settings */
+int quic_retry_max_delay_ms = 10000;     /* Maximum 10 seconds */
+int quic_retry_initial_delay_ms = 100;   /* Start at 100ms */
+bool quic_retry_jitter_enabled = true;   /* Jitter enabled by default */
+
 static int config_compare(const config_t *a, const config_t *b) {
 	int result;
 

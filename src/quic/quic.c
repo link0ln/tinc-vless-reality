@@ -34,6 +34,9 @@
 /* External configuration variables */
 extern bool quic_migration_enabled;
 extern int quic_hop_interval_ms;
+extern int quic_retry_max_delay_ms;
+extern int quic_retry_initial_delay_ms;
+extern bool quic_retry_jitter_enabled;
 
 /* Forward declaration for quiche debug callback */
 static void quic_dbg_cb(const char *line, void *arg);
@@ -293,6 +296,12 @@ quic_conn_t *quic_conn_new_client(quiche_config *config, const char *server_name
 	qconn->old_sock_fd = -1;
 	memset(&qconn->old_fd_close_time, 0, sizeof(qconn->old_fd_close_time));
 
+	/* Initialize retry state */
+	qconn->retry_count = 0;
+	qconn->current_delay_ms = 0;
+	qconn->retry_scheduled = false;
+	memset(&qconn->next_retry_time, 0, sizeof(qconn->next_retry_time));
+
     logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC client connection to %s (migration=%s)",
            server_name, qconn->migration_enabled ? "enabled" : "disabled");
 
@@ -354,6 +363,12 @@ quic_conn_t *quic_conn_new_server(quiche_config *config, const uint8_t *dcid, si
 	memset(&qconn->last_migration, 0, sizeof(qconn->last_migration));
 	qconn->old_sock_fd = -1;
 	memset(&qconn->old_fd_close_time, 0, sizeof(qconn->old_fd_close_time));
+
+	/* Initialize retry state */
+	qconn->retry_count = 0;
+	qconn->current_delay_ms = 0;
+	qconn->retry_scheduled = false;
+	memset(&qconn->next_retry_time, 0, sizeof(qconn->next_retry_time));
 
 	logger(DEBUG_PROTOCOL, LOG_INFO, "Accepted QUIC server connection (migration=%s)",
 	       qconn->migration_enabled ? "enabled" : "disabled");

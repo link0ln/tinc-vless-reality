@@ -60,6 +60,11 @@ extern bool disable_sptps_with_vless;   /* Disable SPTPS when VLESS active */
 extern bool quic_migration_enabled;     /* Enable connection migration */
 extern int quic_hop_interval_ms;        /* Migration interval in milliseconds */
 
+/* QUIC Retry Settings */
+extern int quic_retry_max_delay_ms;     /* Maximum retry delay (default: 10000 = 10s) */
+extern int quic_retry_initial_delay_ms; /* Initial retry delay (default: 100ms) */
+extern bool quic_retry_jitter_enabled;  /* Add jitter to prevent thundering herd */
+
 extern void init_configuration(splay_tree_t **config_tree);
 extern void exit_configuration(splay_tree_t **config_tree);
 extern config_t *new_config(void) __attribute__((__malloc__));

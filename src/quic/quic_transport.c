@@ -45,9 +45,23 @@
 quic_manager_t *quic_manager = NULL;
 static timeout_t quic_timer;
 static timeout_t migration_timer;
+static timeout_t retry_timer;
+
+/* External configuration variables */
+extern bool quic_migration_enabled;
+extern int quic_hop_interval_ms;
+extern int quic_retry_max_delay_ms;
+extern int quic_retry_initial_delay_ms;
+extern bool quic_retry_jitter_enabled;
 
 /* Forward declarations for migration support */
 static void quic_migration_task(void *data);
+
+/* Forward declarations for retry support */
+static void quic_retry_task(void *data);
+static void init_retry_state(quic_conn_t *qconn);
+static uint32_t calculate_retry_delay(quic_conn_t *qconn);
+static void schedule_retry(quic_conn_t *qconn);
 
 /* Helper: find an existing QUIC meta connection_t without bound node
  * that matches the given qconn peer address. */
@@ -412,6 +426,13 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
         logger(DEBUG_ALWAYS, LOG_INFO, "QUIC migration task started");
     }
 
+    /* Start retry task for exponential backoff */
+    timeout_add(&retry_timer, quic_retry_task, NULL, &(struct timeval){1, 0});
+    logger(DEBUG_ALWAYS, LOG_INFO,
+           "QUIC retry task started (initial_delay=%dms, max_delay=%dms, jitter=%s)",
+           quic_retry_initial_delay_ms, quic_retry_max_delay_ms,
+           quic_retry_jitter_enabled ? "enabled" : "disabled");
+
 	/* Initialize Reality configuration if enabled */
 	if(vless_reality_enabled) {
 		quic_manager->reality_config = reality_config_new(true);  /* Server mode */
@@ -656,6 +677,9 @@ quic_conn_t *quic_transport_create_connection(node_t *node, bool is_client, cons
 
 	/* Link to node */
 	quic_conn_set_node(qconn, node);
+
+	/* Initialize retry state */
+	init_retry_state(qconn);
 
 	/* Add to connection tree */
 	splay_insert(quic_manager->connections, qconn);
@@ -1666,6 +1690,205 @@ void quic_transport_flush_meta(connection_t *c) {
     quic_conn_t *qconn = quic_transport_get_connection(c->node, NULL);
     if(!qconn) return;
     quic_flush_meta_outbuf(c, qconn);
+}
+
+/* ========================================================================
+ * Exponential Backoff Retry Logic (предотвращение thundering herd)
+ * ======================================================================== */
+
+/**
+ * Initialize retry state for a connection
+ * Sets initial values for exponential backoff algorithm
+ */
+static void init_retry_state(quic_conn_t *qconn) {
+    if(!qconn) return;
+
+    qconn->retry_count = 0;
+    qconn->current_delay_ms = quic_retry_initial_delay_ms;
+    qconn->retry_scheduled = false;
+    memset(&qconn->next_retry_time, 0, sizeof(qconn->next_retry_time));
+
+    logger(DEBUG_PROTOCOL, LOG_DEBUG,
+           "Initialized retry state for connection (initial_delay=%dms, max_delay=%dms)",
+           quic_retry_initial_delay_ms, quic_retry_max_delay_ms);
+}
+
+/**
+ * Calculate next retry delay using exponential backoff with optional jitter
+ * Formula: delay = min(initial * 2^retry_count, max_delay) * (1 ± jitter)
+ * Jitter range: ±20% to prevent thundering herd
+ */
+static uint32_t calculate_retry_delay(quic_conn_t *qconn) {
+    if(!qconn) return quic_retry_initial_delay_ms;
+
+    /* Exponential backoff: initial_delay * 2^retry_count */
+    uint32_t delay_ms = quic_retry_initial_delay_ms;
+
+    /* Prevent overflow: cap at 2^20 iterations */
+    uint32_t shift = (qconn->retry_count > 20) ? 20 : qconn->retry_count;
+
+    /* Compute delay with overflow protection */
+    if(shift > 0) {
+        uint32_t multiplier = 1U << shift;  /* 2^retry_count */
+
+        /* Check for overflow before multiplication */
+        if(delay_ms <= quic_retry_max_delay_ms / multiplier) {
+            delay_ms *= multiplier;
+        } else {
+            delay_ms = quic_retry_max_delay_ms;
+        }
+    }
+
+    /* Cap at maximum delay */
+    if(delay_ms > (uint32_t)quic_retry_max_delay_ms) {
+        delay_ms = quic_retry_max_delay_ms;
+    }
+
+    /* Add jitter: ±20% randomization to prevent thundering herd */
+    if(quic_retry_jitter_enabled && delay_ms > 0) {
+        /* Generate random value in range [0.8, 1.2] */
+        /* jitter_factor = 0.8 + (rand() % 400) / 1000.0 */
+        int32_t jitter_percent = (rand() % 40) - 20;  /* -20 to +20 */
+        int32_t jitter_ms = (delay_ms * jitter_percent) / 100;
+
+        /* Apply jitter with bounds checking */
+        if(jitter_ms > 0 && delay_ms < UINT32_MAX - (uint32_t)jitter_ms) {
+            delay_ms += jitter_ms;
+        } else if(jitter_ms < 0 && delay_ms > (uint32_t)(-jitter_ms)) {
+            delay_ms -= (-jitter_ms);
+        }
+
+        /* Ensure we don't go below 1ms */
+        if(delay_ms < 1) delay_ms = 1;
+    }
+
+    logger(DEBUG_PROTOCOL, LOG_DEBUG,
+           "Calculated retry delay: %ums (retry_count=%u, jitter=%s)",
+           delay_ms, qconn->retry_count,
+           quic_retry_jitter_enabled ? "enabled" : "disabled");
+
+    return delay_ms;
+}
+
+/**
+ * Schedule a retry attempt for failed connection
+ * Uses exponential backoff to calculate when to retry
+ */
+static void schedule_retry(quic_conn_t *qconn) {
+    if(!qconn) return;
+
+    /* Calculate next delay with exponential backoff */
+    uint32_t delay_ms = calculate_retry_delay(qconn);
+    qconn->current_delay_ms = delay_ms;
+
+    /* Set next retry time */
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
+    qconn->next_retry_time.tv_sec = now.tv_sec + (delay_ms / 1000);
+    qconn->next_retry_time.tv_usec = now.tv_usec + ((delay_ms % 1000) * 1000);
+
+    /* Handle microsecond overflow */
+    if(qconn->next_retry_time.tv_usec >= 1000000) {
+        qconn->next_retry_time.tv_sec++;
+        qconn->next_retry_time.tv_usec -= 1000000;
+    }
+
+    qconn->retry_scheduled = true;
+    qconn->retry_count++;
+
+    char *peer_str = sockaddr2hostname((const sockaddr_t *)&qconn->peer_addr);
+    logger(DEBUG_PROTOCOL, LOG_INFO,
+           "Scheduled retry #%u for %s in %ums",
+           qconn->retry_count, peer_str, delay_ms);
+    free(peer_str);
+}
+
+/**
+ * Retry task: periodically checks connections and retries failed ones
+ * Runs every 1 second to check for connections ready to retry
+ */
+static void quic_retry_task(void *data) {
+    (void)data;
+
+    if(!quic_manager || !quic_manager->connections) {
+        /* Reschedule for 1 second */
+        timeout_set(&retry_timer, &(struct timeval){1, 0});
+        return;
+    }
+
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
+    uint32_t total = 0;
+    uint32_t retried = 0;
+    uint32_t succeeded = 0;
+
+    /* Iterate through all connections */
+    for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+        quic_conn_t *qconn = (quic_conn_t *)n->data;
+        if(!qconn || !qconn->conn) continue;
+
+        total++;
+
+        /* Skip if no retry is scheduled */
+        if(!qconn->retry_scheduled) continue;
+
+        /* Check if it's time to retry */
+        if(timercmp(&now, &qconn->next_retry_time, <)) {
+            /* Not yet time to retry */
+            continue;
+        }
+
+        retried++;
+
+        /* Clear retry flag before attempting */
+        qconn->retry_scheduled = false;
+
+        /* Check connection state */
+        if(quiche_conn_is_established(qconn->conn)) {
+            /* Connection recovered on its own */
+            logger(DEBUG_PROTOCOL, LOG_INFO,
+                   "Connection recovered without retry (after %u attempts)",
+                   qconn->retry_count);
+            init_retry_state(qconn);  /* Reset retry state */
+            succeeded++;
+            continue;
+        }
+
+        if(quiche_conn_is_closed(qconn->conn)) {
+            /* Connection is dead, schedule another retry */
+            char *peer_str = sockaddr2hostname((const sockaddr_t *)&qconn->peer_addr);
+            logger(DEBUG_PROTOCOL, LOG_WARNING,
+                   "Connection to %s still closed, scheduling retry #%u (delay=%ums)",
+                   peer_str, qconn->retry_count + 1, qconn->current_delay_ms);
+            free(peer_str);
+
+            schedule_retry(qconn);
+
+            /* Try to send any pending data to trigger reconnection */
+            ssize_t sent = quic_conn_send(qconn);
+            if(sent > 0) {
+                logger(DEBUG_PROTOCOL, LOG_DEBUG,
+                       "Sent %zd bytes during retry attempt", sent);
+            }
+        } else {
+            /* Connection is in progress, wait for it */
+            logger(DEBUG_PROTOCOL, LOG_DEBUG,
+                   "Connection in progress, resetting retry state");
+            init_retry_state(qconn);
+            succeeded++;
+        }
+    }
+
+    if(retried > 0 || total > 0) {
+        logger(DEBUG_PROTOCOL, LOG_DEBUG,
+               "Retry cycle: %u total connections, %u retried, %u succeeded",
+               total, retried, succeeded);
+    }
+
+    /* Reschedule for 1 second */
+    timeout_set(&retry_timer, &(struct timeval){1, 0});
 }
 
 /* ========================================================================

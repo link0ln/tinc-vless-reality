@@ -93,6 +93,12 @@ typedef struct quic_conn_t {
 	int old_sock_fd;                // previous socket (draining)
 	struct timeval old_fd_close_time; // when to close old_sock_fd
 
+	/* Retry logic with exponential backoff */
+	uint32_t retry_count;           // number of retry attempts
+	uint32_t current_delay_ms;      // current retry delay in milliseconds
+	struct timeval next_retry_time; // when to attempt next retry
+	bool retry_scheduled;           // retry timer is active
+
 	/* Linked to tinc node */
 	void *node;                     // node_t * (to avoid circular deps)
 } quic_conn_t;

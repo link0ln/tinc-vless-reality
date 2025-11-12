@@ -1336,6 +1336,15 @@ bool setup_network(void) {
 		       quic_hop_interval_ms / 1000);
 	}
 
+	/* QUIC Retry Settings */
+	get_config_int(lookup_config(config_tree, "QuicRetryMaxDelay"), &quic_retry_max_delay_ms);
+	get_config_int(lookup_config(config_tree, "QuicRetryInitialDelay"), &quic_retry_initial_delay_ms);
+	get_config_bool(lookup_config(config_tree, "QuicRetryJitterEnabled"), &quic_retry_jitter_enabled);
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Retry: max_delay=%dms, initial_delay=%dms, jitter=%s",
+	       quic_retry_max_delay_ms, quic_retry_initial_delay_ms,
+	       quic_retry_jitter_enabled ? "enabled" : "disabled");
+
 	if(!setup_myself()) {
 		return false;
 	}
