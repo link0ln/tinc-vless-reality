@@ -44,6 +44,10 @@
 /* Global QUIC manager */
 quic_manager_t *quic_manager = NULL;
 static timeout_t quic_timer;
+static timeout_t migration_timer;
+
+/* Forward declarations for migration support */
+static void quic_migration_task(void *data);
 
 /* Helper: find an existing QUIC meta connection_t without bound node
  * that matches the given qconn peer address. */
@@ -1667,9 +1671,6 @@ void quic_transport_flush_meta(connection_t *c) {
 /* ========================================================================
  * Connection Migration Support (обход UDP throttling)
  * ======================================================================== */
-
-/* Migration timer */
-static timeout_t migration_timer;
 
 /* Create new UDP socket for migration (random ephemeral port) */
 static int create_migration_socket(int family) {
