@@ -1108,9 +1108,9 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					c->status.quic_meta = true;
 					c->status.sptps_disabled = true;
 
-					/* Server does NOT create its own stream - it will discover client's stream 0
-					 * and use it for bidirectional communication */
-					c->quic_stream_id = -1;  // Will be set when client stream is discovered
+					/* Server receives client data on client-initiated stream 0
+					 * Clients always use bidirectional stream 0 for metadata */
+					c->quic_stream_id = 0;  // Client stream 0
 
 					/* Add to connection list - will be linked to node when ID message arrives */
 					connection_add(c);
