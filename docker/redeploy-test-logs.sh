@@ -12,7 +12,7 @@ echo "==========================================="
 # Build and deploy
 echo ""
 echo "=== Building Docker images ==="
-docker compose -f docker-compose.optimized.yml build --no-cache
+docker compose -f docker-compose.optimized.yml build 
 
 echo ""
 echo "=== Restarting containers ==="
