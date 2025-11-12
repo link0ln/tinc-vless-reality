@@ -885,9 +885,20 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	uint8_t token[256];
 	size_t token_len = sizeof(token);
 
-    /* NOTE: Use a destination CID length hint of 0 to let quiche parse DCID length from packet.
-     * Using a fixed LOCAL_CONN_ID_LEN can cause DCID==SCID in logs when lengths mismatch. */
-    int rc = quiche_header_info(buf, len, 0,
+    /* Detect packet type from first byte to determine DCID length hint:
+     * - Long Header (bit 7 = 1): DCID length is encoded in packet, use hint=0
+     * - Short Header (bit 7 = 0): DCID length is NOT in packet, use hint=LOCAL_CONN_ID_LEN
+     * This fixes the issue where Short Header packets were parsed with empty DCID. */
+    size_t dcid_len_hint = 0;
+    if(len > 0) {
+        bool is_long_header = (buf[0] & 0x80) != 0;
+        if(!is_long_header) {
+            /* Short Header packet: need to provide expected DCID length */
+            dcid_len_hint = LOCAL_CONN_ID_LEN;
+        }
+    }
+
+    int rc = quiche_header_info(buf, len, dcid_len_hint,
                                  &version, &type,
                                  scid, &scid_len,
                                  dcid, &dcid_len,
@@ -895,11 +906,9 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 
 	/* Log parsed header information */
 	if(rc >= 0) {
-		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Parsed QUIC header: type=%u version=0x%x DCID=%s (len=%zu) SCID=%s (len=%zu)",
-		       type, version, format_cid(dcid, dcid_len), dcid_len,
-		       format_cid(scid, scid_len), scid_len);
-		/* TRACE: Log SCID value immediately after parsing */
-		logger(DEBUG_PROTOCOL, LOG_INFO, "TRACE after parse: scid=%s scid_len=%zu",
+		const char *header_type = (dcid_len_hint == 0) ? "Long" : "Short";
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "Parsed QUIC %s Header: type=%u version=0x%x DCID=%s (len=%zu) SCID=%s (len=%zu)",
+		       header_type, type, version, format_cid(dcid, dcid_len), dcid_len,
 		       format_cid(scid, scid_len), scid_len);
 	} else {
 		logger(DEBUG_PROTOCOL, LOG_WARNING, "Failed to parse QUIC header: rc=%d", rc);
@@ -958,10 +967,6 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	/* For client connections: register peer SCID from packet header BEFORE processing packet
 	 * This allows quiche to recognize the DCID in server responses during handshake */
 	if(qconn && qconn->is_client && scid_len > 0) {
-		/* TRACE: Log SCID value right before registration */
-		logger(DEBUG_PROTOCOL, LOG_INFO, "TRACE before register: qconn=%p is_client=%d scid=%s scid_len=%zu",
-		       qconn, qconn->is_client, format_cid(scid, scid_len), scid_len);
-
 		/* Check if this peer SCID is already registered */
 		quic_conn_t *existing = lookup_connection_by_id(scid, scid_len);
 		if(!existing) {
