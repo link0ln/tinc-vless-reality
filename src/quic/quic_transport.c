@@ -994,6 +994,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 	}
 
     if(qconn) {
+        logger(DEBUG_PROTOCOL, LOG_INFO, "###VERSION_CHECK### Code compiled with commit 7151b5b+ patches");
         /* Feed packet to connection; loop until quiche reports no more packets to send */
         ssize_t done = quic_conn_recv(qconn, buf, len);
 
@@ -1298,62 +1299,67 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					}
 				}
             } else {
-                logger(DEBUG_PROTOCOL, LOG_INFO, "###META### node IS NULL, entering else block");
+                logger(DEBUG_ALWAYS, LOG_ERR, "!!! ELSE BLOCK ENTERED !!! node is NULL, qconn=%p", (void*)qconn);
                 /* Handle unbound server-side meta connection: directly process stream 0 data
                  * to receive ID message and bind to node. */
-                logger(DEBUG_PROTOCOL, LOG_INFO, "==> ELSE BLOCK: Handling unbound connection, qconn=%p", (void*)qconn);
 
                 /* Check if stream 0 has readable data */
                 bool fin = false;
                 uint64_t error_code = 0;
                 quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
-                logger(DEBUG_PROTOCOL, LOG_INFO, "==> quiche_conn_readable returned: %p", (void*)readable);
+                logger(DEBUG_ALWAYS, LOG_ERR, "!!! readable iterator = %p", (void*)readable);
 
                 if(readable) {
                     uint64_t stream_id;
                     int stream_count = 0;
                     while(quiche_stream_iter_next(readable, &stream_id)) {
                         stream_count++;
-                        logger(DEBUG_PROTOCOL, LOG_INFO, "==> Found readable stream %lu", (unsigned long)stream_id);
+                        logger(DEBUG_ALWAYS, LOG_ERR, "!!! Found readable stream %lu", (unsigned long)stream_id);
 
                         if(stream_id == 0) {
                             /* Stream 0 has data - read ID message directly */
-                            logger(DEBUG_PROTOCOL, LOG_INFO, "==> Stream 0 found! Attempting to read...");
+                            logger(DEBUG_ALWAYS, LOG_ERR, "!!! Stream 0 found! Reading...");
                             uint8_t buf[2048];
                             ssize_t len = quiche_conn_stream_recv(qconn->conn, stream_id, buf, sizeof(buf), &fin, &error_code);
-                            logger(DEBUG_PROTOCOL, LOG_INFO, "==> quiche_conn_stream_recv returned: len=%zd, error_code=%lu", len, (unsigned long)error_code);
+                            logger(DEBUG_ALWAYS, LOG_ERR, "!!! Read returned: len=%zd, error=%lu", len, (unsigned long)error_code);
 
                             if(len > 0) {
-                                logger(DEBUG_PROTOCOL, LOG_INFO, "Read %zd bytes from stream 0 for unbound connection", len);
+                                logger(DEBUG_ALWAYS, LOG_ERR, "!!! Successfully read %zd bytes from stream 0", len);
 
                                 /* Find unbound connection for this peer */
                                 connection_t *uc = find_unbound_quic_meta_for_peer(qconn);
                                 if(uc) {
+                                    logger(DEBUG_ALWAYS, LOG_ERR, "!!! Found unbound connection, processing ID");
                                     /* Copy data to connection buffer */
                                     buffer_add(&uc->inbuf, (char *)buf, len);
 
                                     /* Extract and process request line */
                                     char *request = buffer_readline(&uc->inbuf);
                                     if(request) {
-                                        logger(DEBUG_PROTOCOL, LOG_INFO, "Processing ID request from unbound connection: %s", request);
+                                        logger(DEBUG_ALWAYS, LOG_ERR, "!!! Processing ID request: %s", request);
                                         if(!receive_request(uc, request)) {
-                                            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process ID from unbound connection");
+                                            logger(DEBUG_ALWAYS, LOG_ERR, "!!! receive_request FAILED");
+                                        } else {
+                                            logger(DEBUG_ALWAYS, LOG_ERR, "!!! receive_request SUCCEEDED");
                                         }
                                     } else {
-                                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Incomplete ID message, waiting for more data");
+                                        logger(DEBUG_ALWAYS, LOG_ERR, "!!! buffer_readline returned NULL (incomplete)");
                                     }
                                 } else {
-                                    logger(DEBUG_PROTOCOL, LOG_WARNING, "Received stream 0 data but no unbound connection found");
+                                    logger(DEBUG_ALWAYS, LOG_ERR, "!!! No unbound connection found for this peer");
                                 }
+                            } else if(len < 0) {
+                                logger(DEBUG_ALWAYS, LOG_ERR, "!!! quiche_conn_stream_recv FAILED: %zd", len);
                             }
                             break;
                         }
                     }
-                    logger(DEBUG_PROTOCOL, LOG_INFO, "==> Total readable streams checked: %d", stream_count);
+                    logger(DEBUG_ALWAYS, LOG_ERR, "!!! Total streams checked: %d", stream_count);
                     quiche_stream_iter_free(readable);
                 } else {
-                    logger(DEBUG_PROTOCOL, LOG_WARNING, "==> quiche_conn_readable() returned NULL for unbound connection");
+                    logger(DEBUG_ALWAYS, LOG_ERR, "!!! quiche_conn_readable returned NULL!");
                 }
+                logger(DEBUG_ALWAYS, LOG_ERR, "!!! ELSE BLOCK EXITING !!!");
             }
 
 			/* Flush buffered packets if handshake just completed */
