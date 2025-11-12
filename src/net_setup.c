@@ -1353,6 +1353,15 @@ bool setup_network(void) {
 	       quic_keepalive_enabled ? "enabled" : "disabled",
 	       quic_keepalive_interval_ms);
 
+	/* QUIC Session Cleanup Settings */
+	get_config_bool(lookup_config(config_tree, "QuicCleanupEnabled"), &quic_cleanup_enabled);
+	get_config_int(lookup_config(config_tree, "QuicCleanupInterval"), &quic_cleanup_interval_ms);
+	get_config_int(lookup_config(config_tree, "QuicSessionMaxIdle"), &quic_session_max_idle_ms);
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Cleanup: %s (interval=%dms, max_idle=%dms)",
+	       quic_cleanup_enabled ? "enabled" : "disabled",
+	       quic_cleanup_interval_ms, quic_session_max_idle_ms);
+
 	if(!setup_myself()) {
 		return false;
 	}

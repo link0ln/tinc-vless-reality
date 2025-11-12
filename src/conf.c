@@ -72,6 +72,11 @@ bool quic_retry_jitter_enabled = true;   /* Jitter enabled by default */
 bool quic_keepalive_enabled = true;      /* Keep-alive enabled by default */
 int quic_keepalive_interval_ms = 15000;  /* 15 seconds default (15000ms) */
 
+/* QUIC Session Cleanup Settings */
+bool quic_cleanup_enabled = true;        /* Cleanup enabled by default */
+int quic_cleanup_interval_ms = 60000;    /* 1 minute default (60000ms) */
+int quic_session_max_idle_ms = 300000;   /* 5 minutes idle timeout (300000ms) */
+
 static int config_compare(const config_t *a, const config_t *b) {
 	int result;
 

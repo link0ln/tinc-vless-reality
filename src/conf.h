@@ -69,6 +69,11 @@ extern bool quic_retry_jitter_enabled;  /* Add jitter to prevent thundering herd
 extern bool quic_keepalive_enabled;     /* Enable QUIC keep-alive pings (default: true) */
 extern int quic_keepalive_interval_ms;  /* Keep-alive interval in milliseconds (default: 15000 = 15s) */
 
+/* QUIC Session Cleanup Settings */
+extern bool quic_cleanup_enabled;       /* Enable session cleanup task (default: true) */
+extern int quic_cleanup_interval_ms;    /* Cleanup interval in milliseconds (default: 60000 = 1 minute) */
+extern int quic_session_max_idle_ms;    /* Maximum idle time before cleanup (default: 300000 = 5 minutes) */
+
 extern void init_configuration(splay_tree_t **config_tree);
 extern void exit_configuration(splay_tree_t **config_tree);
 extern config_t *new_config(void) __attribute__((__malloc__));

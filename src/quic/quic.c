@@ -39,6 +39,9 @@ extern int quic_retry_initial_delay_ms;
 extern bool quic_retry_jitter_enabled;
 extern bool quic_keepalive_enabled;
 extern int quic_keepalive_interval_ms;
+extern bool quic_cleanup_enabled;
+extern int quic_cleanup_interval_ms;
+extern int quic_session_max_idle_ms;
 
 /* Forward declaration for quiche debug callback */
 static void quic_dbg_cb(const char *line, void *arg);

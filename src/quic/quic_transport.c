@@ -47,6 +47,7 @@ static timeout_t quic_timer;
 static timeout_t migration_timer;
 static timeout_t retry_timer;
 static timeout_t keepalive_timer;
+static timeout_t cleanup_timer;
 
 /* External configuration variables */
 extern bool quic_migration_enabled;
@@ -56,6 +57,9 @@ extern int quic_retry_initial_delay_ms;
 extern bool quic_retry_jitter_enabled;
 extern bool quic_keepalive_enabled;
 extern int quic_keepalive_interval_ms;
+extern bool quic_cleanup_enabled;
+extern int quic_cleanup_interval_ms;
+extern int quic_session_max_idle_ms;
 
 /* Forward declarations for migration support */
 static void quic_migration_task(void *data);
@@ -70,6 +74,9 @@ static void schedule_retry(quic_conn_t *qconn);
 static void quic_keepalive_task(void *data);
 static void init_keepalive_state(quic_conn_t *qconn);
 static void update_last_activity(quic_conn_t *qconn);
+
+/* Forward declarations for session cleanup */
+static void quic_cleanup_task(void *data);
 
 /* Helper: find an existing QUIC meta connection_t without bound node
  * that matches the given qconn peer address. */
@@ -447,6 +454,16 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
         logger(DEBUG_ALWAYS, LOG_INFO,
                "QUIC keep-alive task started (interval=%dms)",
                quic_keepalive_interval_ms);
+    }
+
+    /* Start session cleanup task if enabled */
+    if(quic_cleanup_enabled) {
+        timeout_add(&cleanup_timer, quic_cleanup_task, NULL,
+                   &(struct timeval){quic_cleanup_interval_ms / 1000,
+                                     (quic_cleanup_interval_ms % 1000) * 1000});
+        logger(DEBUG_ALWAYS, LOG_INFO,
+               "QUIC cleanup task started (interval=%dms, max_idle=%dms)",
+               quic_cleanup_interval_ms, quic_session_max_idle_ms);
     }
 
 	/* Initialize Reality configuration if enabled */
@@ -1836,6 +1853,133 @@ static void quic_keepalive_task(void *data) {
 
     /* Reschedule for 5 seconds */
     timeout_set(&keepalive_timer, &(struct timeval){5, 0});
+}
+
+/* ========================================================================
+ * Session Cleanup Task (удаление мертвых соединений)
+ * ======================================================================== */
+
+/**
+ * Session cleanup task: periodically removes dead/stale connections
+ * Runs every cleanup_interval_ms to check for:
+ * - Closed connections that can be removed
+ * - Idle connections exceeding max_idle_ms
+ * - Connections with protocol errors
+ */
+static void quic_cleanup_task(void *data) {
+    (void)data;
+
+    if(!quic_manager || !quic_manager->connections || !quic_cleanup_enabled) {
+        /* Reschedule based on config (default: 60 seconds) */
+        timeout_set(&cleanup_timer,
+                   &(struct timeval){quic_cleanup_interval_ms / 1000,
+                                     (quic_cleanup_interval_ms % 1000) * 1000});
+        return;
+    }
+
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
+    uint32_t total = 0;
+    uint32_t checked = 0;
+    uint32_t removed = 0;
+
+    /* List to track connections to remove (can't modify tree during iteration) */
+    #define MAX_TO_REMOVE 100
+    quic_conn_t *to_remove[MAX_TO_REMOVE];
+    uint32_t to_remove_count = 0;
+
+    /* Iterate through all connections */
+    for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+        quic_conn_t *qconn = (quic_conn_t *)n->data;
+        if(!qconn || !qconn->conn) continue;
+
+        total++;
+        checked++;
+
+        bool should_remove = false;
+        const char *reason = NULL;
+
+        /* Check if connection is closed */
+        if(quiche_conn_is_closed(qconn->conn)) {
+            should_remove = true;
+            reason = "connection closed";
+        }
+        /* Check if connection is idle for too long */
+        else if(qconn->keepalive_enabled) {
+            /* Calculate idle time */
+            struct timeval idle_time;
+            timersub(&now, &qconn->last_activity, &idle_time);
+            uint64_t idle_ms = idle_time.tv_sec * 1000 + idle_time.tv_usec / 1000;
+
+            if(idle_ms > (uint64_t)quic_session_max_idle_ms) {
+                should_remove = true;
+                reason = "max idle timeout exceeded";
+            }
+        }
+        /* Check for protocol errors */
+        else if(!quiche_conn_is_established(qconn->conn)) {
+            /* If handshake not complete after a while, consider it stale */
+            struct timeval conn_age;
+            if(qconn->keepalive_enabled) {
+                /* We can use last_activity as connection start time */
+                timersub(&now, &qconn->last_activity, &conn_age);
+                uint64_t age_ms = conn_age.tv_sec * 1000 + conn_age.tv_usec / 1000;
+
+                /* If handshake takes longer than 30 seconds, something is wrong */
+                if(age_ms > 30000) {
+                    should_remove = true;
+                    reason = "handshake timeout (>30s)";
+                }
+            }
+        }
+
+        if(should_remove && to_remove_count < MAX_TO_REMOVE) {
+            to_remove[to_remove_count++] = qconn;
+
+            char *peer_str = sockaddr2hostname((const sockaddr_t *)&qconn->peer_addr);
+            logger(DEBUG_PROTOCOL, LOG_INFO,
+                   "Marking connection to %s for removal: %s",
+                   peer_str, reason);
+            free(peer_str);
+        }
+    }
+
+    /* Now remove marked connections */
+    for(uint32_t i = 0; i < to_remove_count; i++) {
+        quic_conn_t *qconn = to_remove[i];
+
+        /* Remove from tinc node if linked */
+        if(qconn->node) {
+            node_t *node = (node_t *)qconn->node;
+
+            /* Log removal */
+            char *peer_str = sockaddr2hostname((const sockaddr_t *)&qconn->peer_addr);
+            logger(DEBUG_PROTOCOL, LOG_INFO,
+                   "Removing dead QUIC connection to %s (node=%s)",
+                   peer_str, node->name ? node->name : "unknown");
+            free(peer_str);
+
+            /* Remove via transport layer (handles cleanup properly) */
+            quic_transport_remove_connection(node);
+            removed++;
+        } else {
+            /* Orphaned connection, just log and count */
+            logger(DEBUG_PROTOCOL, LOG_WARNING,
+                   "Found orphaned QUIC connection without node");
+        }
+    }
+
+    if(removed > 0 || checked > 10) {
+        logger(DEBUG_PROTOCOL, LOG_INFO,
+               "Cleanup cycle: %u total, %u checked, %u removed",
+               total, checked, removed);
+    }
+
+    /* Reschedule based on config (default: 60 seconds) */
+    timeout_set(&cleanup_timer,
+               &(struct timeval){quic_cleanup_interval_ms / 1000,
+                                 (quic_cleanup_interval_ms % 1000) * 1000});
 }
 
 /* ========================================================================
