@@ -1648,25 +1648,33 @@ ssize_t quic_meta_recv(quic_conn_t *qconn, int64_t stream_id,
 /* Check if a QUIC meta stream has readable data */
 bool quic_meta_stream_readable(quic_conn_t *qconn, int64_t stream_id) {
 	if(!qconn || !qconn->conn || stream_id < 0) {
+		logger(DEBUG_META, LOG_DEBUG, "quic_meta_stream_readable: invalid params (qconn=%p stream_id=%ld)",
+		       (void*)qconn, stream_id);
 		return false;
 	}
 
 	/* Check if handshake is complete */
 	if(!qconn->handshake_complete) {
+		logger(DEBUG_META, LOG_DEBUG, "quic_meta_stream_readable: handshake not complete for stream %ld", stream_id);
 		return false;
 	}
 
 	/* Get iterator for readable streams */
 	quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
 	if(!readable) {
+		logger(DEBUG_META, LOG_DEBUG, "quic_meta_stream_readable: quiche_conn_readable returned NULL for stream %ld", stream_id);
 		return false;
 	}
 
 	/* Check if our stream is in the readable set */
 	uint64_t s;
 	bool found = false;
+	int count = 0;
 
 	while(quiche_stream_iter_next(readable, &s)) {
+		count++;
+		logger(DEBUG_META, LOG_DEBUG, "quic_meta_stream_readable: found readable stream %lu (looking for %ld)",
+		       (unsigned long)s, stream_id);
 		if(s == (uint64_t)stream_id) {
 			found = true;
 			break;
@@ -1674,6 +1682,9 @@ bool quic_meta_stream_readable(quic_conn_t *qconn, int64_t stream_id) {
 	}
 
 	quiche_stream_iter_free(readable);
+
+	logger(DEBUG_META, LOG_INFO, "quic_meta_stream_readable: stream %ld %s (checked %d streams)",
+	       stream_id, found ? "FOUND" : "NOT FOUND", count);
 	return found;
 }
 
