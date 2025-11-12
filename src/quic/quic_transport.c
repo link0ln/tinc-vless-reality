@@ -1252,6 +1252,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 			node_t *node = (node_t *)qconn->node;
 
             logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet processed: qconn->node=%p", (void*)node);
+            logger(DEBUG_PROTOCOL, LOG_ERR, "###ABOUT TO CHECK node=%p###", (void*)node);
 
             if(node) {
 				logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC node found: name=%s, connection=%p",
@@ -1299,6 +1300,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
             } else {
                 /* Handle unbound server-side meta connection: process readable meta
                  * so that ID can be received and node binding can proceed. */
+                logger(DEBUG_PROTOCOL, LOG_ERR, "###ELSE BLOCK ENTERED### qconn=%p, processing unbound connection", (void*)qconn);
                 connection_t *uc = find_unbound_quic_meta_for_peer(qconn);
                 if(uc) {
                     logger(DEBUG_PROTOCOL, LOG_DEBUG, "Found unbound connection for peer: hostname=%s, quic_stream_id=%ld",
