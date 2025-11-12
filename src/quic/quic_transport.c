@@ -1252,7 +1252,6 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 			node_t *node = (node_t *)qconn->node;
 
             logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet processed: qconn->node=%p", (void*)node);
-            logger(DEBUG_PROTOCOL, LOG_ERR, "###ABOUT TO CHECK node=%p###", (void*)node);
 
             if(node) {
 				logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC node found: name=%s, connection=%p",
@@ -1298,34 +1297,44 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					}
 				}
             } else {
-                /* Handle unbound server-side meta connection: process readable meta
-                 * so that ID can be received and node binding can proceed. */
-                logger(DEBUG_PROTOCOL, LOG_ERR, "###ELSE BLOCK ENTERED### qconn=%p, processing unbound connection", (void*)qconn);
-                connection_t *uc = find_unbound_quic_meta_for_peer(qconn);
-                if(uc) {
-                    logger(DEBUG_PROTOCOL, LOG_DEBUG, "Found unbound connection for peer: hostname=%s, quic_stream_id=%ld",
-                           uc->hostname ? uc->hostname : "NULL", (long)uc->quic_stream_id);
-                    /* Discover stream if needed */
-                    if(uc->quic_stream_id < 0) {
-                        /* Directly assign stream 0 - clients always use bidirectional stream 0 for metadata */
-                        uc->quic_stream_id = 0;
-                        logger(DEBUG_PROTOCOL, LOG_INFO, "Assigned stream 0 to unbound peer %s (clients always use stream 0)",
-                               uc->hostname ? uc->hostname : "NULL");
-                    } else {
-                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unbound connection already has stream_id=%ld", (long)uc->quic_stream_id);
-                    }
+                /* Handle unbound server-side meta connection: directly process stream 0 data
+                 * to receive ID message and bind to node. */
 
-                    /* For unbound connections, process metadata through receive_meta()
-                     * which will handle reading and parsing the ID message */
-                    if(uc->quic_stream_id >= 0) {
-                        logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing metadata for unbound connection");
-                        /* receive_meta() now handles unbound connections by looking up qconn by address */
-                        if(!receive_meta(uc)) {
-                            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process metadata from unbound connection");
+                /* Check if stream 0 has readable data */
+                bool fin = false;
+                quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
+                if(readable) {
+                    uint64_t stream_id;
+                    while(quiche_stream_iter_next(readable, &stream_id)) {
+                        if(stream_id == 0) {
+                            /* Stream 0 has data - read ID message directly */
+                            uint8_t buf[2048];
+                            ssize_t len = quiche_conn_stream_recv(qconn->conn, stream_id, buf, sizeof(buf), &fin);
+
+                            if(len > 0) {
+                                logger(DEBUG_PROTOCOL, LOG_INFO, "Read %zd bytes from stream 0 for unbound connection", len);
+
+                                /* Find or create unbound connection for this peer */
+                                connection_t *uc = find_unbound_quic_meta_for_peer(qconn);
+                                if(uc) {
+                                    /* Process ID message */
+                                    if(len <= (ssize_t)(sizeof(uc->inbuf.data) - uc->inbuf.len)) {
+                                        memcpy(uc->inbuf.data + uc->inbuf.len, buf, len);
+                                        uc->inbuf.len += len;
+
+                                        /* Process the buffered data */
+                                        if(!receive_request(uc)) {
+                                            logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process ID from unbound connection");
+                                        }
+                                    }
+                                } else {
+                                    logger(DEBUG_PROTOCOL, LOG_WARNING, "Received stream 0 data but no unbound connection found");
+                                }
+                            }
+                            break;
                         }
                     }
-                } else {
-                    logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC packet has no associated node and no unbound meta found");
+                    quiche_stream_iter_free(readable);
                 }
             }
 
