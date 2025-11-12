@@ -65,6 +65,10 @@ extern int quic_retry_max_delay_ms;     /* Maximum retry delay (default: 10000 =
 extern int quic_retry_initial_delay_ms; /* Initial retry delay (default: 100ms) */
 extern bool quic_retry_jitter_enabled;  /* Add jitter to prevent thundering herd */
 
+/* QUIC Keep-Alive Settings */
+extern bool quic_keepalive_enabled;     /* Enable QUIC keep-alive pings (default: true) */
+extern int quic_keepalive_interval_ms;  /* Keep-alive interval in milliseconds (default: 15000 = 15s) */
+
 extern void init_configuration(splay_tree_t **config_tree);
 extern void exit_configuration(splay_tree_t **config_tree);
 extern config_t *new_config(void) __attribute__((__malloc__));

@@ -1345,6 +1345,14 @@ bool setup_network(void) {
 	       quic_retry_max_delay_ms, quic_retry_initial_delay_ms,
 	       quic_retry_jitter_enabled ? "enabled" : "disabled");
 
+	/* QUIC Keep-Alive Settings */
+	get_config_bool(lookup_config(config_tree, "QuicKeepAliveEnabled"), &quic_keepalive_enabled);
+	get_config_int(lookup_config(config_tree, "QuicKeepAliveInterval"), &quic_keepalive_interval_ms);
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Keep-Alive: %s (interval=%dms)",
+	       quic_keepalive_enabled ? "enabled" : "disabled",
+	       quic_keepalive_interval_ms);
+
 	if(!setup_myself()) {
 		return false;
 	}

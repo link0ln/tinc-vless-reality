@@ -46,6 +46,7 @@ quic_manager_t *quic_manager = NULL;
 static timeout_t quic_timer;
 static timeout_t migration_timer;
 static timeout_t retry_timer;
+static timeout_t keepalive_timer;
 
 /* External configuration variables */
 extern bool quic_migration_enabled;
@@ -53,6 +54,8 @@ extern int quic_hop_interval_ms;
 extern int quic_retry_max_delay_ms;
 extern int quic_retry_initial_delay_ms;
 extern bool quic_retry_jitter_enabled;
+extern bool quic_keepalive_enabled;
+extern int quic_keepalive_interval_ms;
 
 /* Forward declarations for migration support */
 static void quic_migration_task(void *data);
@@ -62,6 +65,11 @@ static void quic_retry_task(void *data);
 static void init_retry_state(quic_conn_t *qconn);
 static uint32_t calculate_retry_delay(quic_conn_t *qconn);
 static void schedule_retry(quic_conn_t *qconn);
+
+/* Forward declarations for keep-alive support */
+static void quic_keepalive_task(void *data);
+static void init_keepalive_state(quic_conn_t *qconn);
+static void update_last_activity(quic_conn_t *qconn);
 
 /* Helper: find an existing QUIC meta connection_t without bound node
  * that matches the given qconn peer address. */
@@ -433,6 +441,14 @@ bool quic_transport_init(listen_socket_t *sockets, int num_sockets) {
            quic_retry_initial_delay_ms, quic_retry_max_delay_ms,
            quic_retry_jitter_enabled ? "enabled" : "disabled");
 
+    /* Start keep-alive task if enabled */
+    if(quic_keepalive_enabled) {
+        timeout_add(&keepalive_timer, quic_keepalive_task, NULL, &(struct timeval){5, 0});
+        logger(DEBUG_ALWAYS, LOG_INFO,
+               "QUIC keep-alive task started (interval=%dms)",
+               quic_keepalive_interval_ms);
+    }
+
 	/* Initialize Reality configuration if enabled */
 	if(vless_reality_enabled) {
 		quic_manager->reality_config = reality_config_new(true);  /* Server mode */
@@ -680,6 +696,9 @@ quic_conn_t *quic_transport_create_connection(node_t *node, bool is_client, cons
 
 	/* Initialize retry state */
 	init_retry_state(qconn);
+
+	/* Initialize keep-alive state */
+	init_keepalive_state(qconn);
 
 	/* Add to connection tree */
 	splay_insert(quic_manager->connections, qconn);
@@ -1690,6 +1709,133 @@ void quic_transport_flush_meta(connection_t *c) {
     quic_conn_t *qconn = quic_transport_get_connection(c->node, NULL);
     if(!qconn) return;
     quic_flush_meta_outbuf(c, qconn);
+}
+
+/* ========================================================================
+ * QUIC Keep-Alive Mechanism (предотвращение idle timeout)
+ * ======================================================================== */
+
+/**
+ * Initialize keep-alive state for a connection
+ * Sets initial activity timestamp and schedules first ping
+ */
+static void init_keepalive_state(quic_conn_t *qconn) {
+    if(!qconn) return;
+
+    qconn->keepalive_enabled = quic_keepalive_enabled;
+
+    if(qconn->keepalive_enabled) {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+
+        qconn->last_activity = now;
+
+        /* Schedule first ping after keep-alive interval */
+        qconn->next_ping_time.tv_sec = now.tv_sec + (quic_keepalive_interval_ms / 1000);
+        qconn->next_ping_time.tv_usec = now.tv_usec + ((quic_keepalive_interval_ms % 1000) * 1000);
+
+        /* Handle microsecond overflow */
+        if(qconn->next_ping_time.tv_usec >= 1000000) {
+            qconn->next_ping_time.tv_sec++;
+            qconn->next_ping_time.tv_usec -= 1000000;
+        }
+
+        logger(DEBUG_PROTOCOL, LOG_DEBUG,
+               "Initialized keep-alive for connection (interval=%dms)",
+               quic_keepalive_interval_ms);
+    }
+}
+
+/**
+ * Update last activity timestamp when sending/receiving data
+ * Resets keep-alive timer to prevent unnecessary PINGs
+ */
+static void update_last_activity(quic_conn_t *qconn) {
+    if(!qconn || !qconn->keepalive_enabled) return;
+
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
+    qconn->last_activity = now;
+
+    /* Schedule next ping after keep-alive interval */
+    qconn->next_ping_time.tv_sec = now.tv_sec + (quic_keepalive_interval_ms / 1000);
+    qconn->next_ping_time.tv_usec = now.tv_usec + ((quic_keepalive_interval_ms % 1000) * 1000);
+
+    /* Handle microsecond overflow */
+    if(qconn->next_ping_time.tv_usec >= 1000000) {
+        qconn->next_ping_time.tv_sec++;
+        qconn->next_ping_time.tv_usec -= 1000000;
+    }
+}
+
+/**
+ * Keep-alive task: periodically sends PING frames to prevent idle timeout
+ * Runs every 5 seconds to check connections that need PINGs
+ */
+static void quic_keepalive_task(void *data) {
+    (void)data;
+
+    if(!quic_manager || !quic_manager->connections || !quic_keepalive_enabled) {
+        /* Reschedule for 5 seconds */
+        timeout_set(&keepalive_timer, &(struct timeval){5, 0});
+        return;
+    }
+
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
+    uint32_t total = 0;
+    uint32_t pinged = 0;
+
+    /* Iterate through all connections */
+    for(splay_node_t *n = quic_manager->connections->head; n; n = n->next) {
+        quic_conn_t *qconn = (quic_conn_t *)n->data;
+        if(!qconn || !qconn->conn) continue;
+
+        total++;
+
+        /* Skip if keep-alive is disabled for this connection */
+        if(!qconn->keepalive_enabled) continue;
+
+        /* Skip if connection is not established */
+        if(!quiche_conn_is_established(qconn->conn)) continue;
+
+        /* Check if it's time to send PING */
+        if(timercmp(&now, &qconn->next_ping_time, <)) {
+            /* Not yet time to ping */
+            continue;
+        }
+
+        pinged++;
+
+        /* Send PING frame via quiche
+         * Note: quiche automatically sends PING when we call quic_conn_send()
+         * with no other data to send. We just need to trigger it. */
+
+        /* Update activity timestamp first */
+        update_last_activity(qconn);
+
+        /* Trigger send to generate PING frame */
+        ssize_t sent = quic_conn_send(qconn);
+        if(sent > 0) {
+            logger(DEBUG_PROTOCOL, LOG_DEBUG,
+                   "Sent keep-alive PING (%zd bytes) to prevent idle timeout",
+                   sent);
+        } else if(sent < 0) {
+            logger(DEBUG_PROTOCOL, LOG_WARNING,
+                   "Failed to send keep-alive PING: %zd", sent);
+        }
+    }
+
+    if(pinged > 0) {
+        logger(DEBUG_PROTOCOL, LOG_DEBUG,
+               "Keep-alive cycle: %u total connections, %u sent PINGs",
+               total, pinged);
+    }
+
+    /* Reschedule for 5 seconds */
+    timeout_set(&keepalive_timer, &(struct timeval){5, 0});
 }
 
 /* ========================================================================

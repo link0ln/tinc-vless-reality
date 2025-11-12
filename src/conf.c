@@ -68,6 +68,10 @@ int quic_retry_max_delay_ms = 10000;     /* Maximum 10 seconds */
 int quic_retry_initial_delay_ms = 100;   /* Start at 100ms */
 bool quic_retry_jitter_enabled = true;   /* Jitter enabled by default */
 
+/* QUIC Keep-Alive Settings */
+bool quic_keepalive_enabled = true;      /* Keep-alive enabled by default */
+int quic_keepalive_interval_ms = 15000;  /* 15 seconds default (15000ms) */
+
 static int config_compare(const config_t *a, const config_t *b) {
 	int result;
 

@@ -99,6 +99,11 @@ typedef struct quic_conn_t {
 	struct timeval next_retry_time; // when to attempt next retry
 	bool retry_scheduled;           // retry timer is active
 
+	/* Keep-alive mechanism */
+	bool keepalive_enabled;         // keep-alive enabled for this connection
+	struct timeval last_activity;   // timestamp of last packet sent/received
+	struct timeval next_ping_time;  // when to send next PING
+
 	/* Linked to tinc node */
 	void *node;                     // node_t * (to avoid circular deps)
 } quic_conn_t;

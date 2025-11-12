@@ -37,6 +37,8 @@ extern int quic_hop_interval_ms;
 extern int quic_retry_max_delay_ms;
 extern int quic_retry_initial_delay_ms;
 extern bool quic_retry_jitter_enabled;
+extern bool quic_keepalive_enabled;
+extern int quic_keepalive_interval_ms;
 
 /* Forward declaration for quiche debug callback */
 static void quic_dbg_cb(const char *line, void *arg);
@@ -302,6 +304,11 @@ quic_conn_t *quic_conn_new_client(quiche_config *config, const char *server_name
 	qconn->retry_scheduled = false;
 	memset(&qconn->next_retry_time, 0, sizeof(qconn->next_retry_time));
 
+	/* Initialize keep-alive state */
+	qconn->keepalive_enabled = quic_keepalive_enabled;
+	gettimeofday(&qconn->last_activity, NULL);
+	memset(&qconn->next_ping_time, 0, sizeof(qconn->next_ping_time));
+
     logger(DEBUG_PROTOCOL, LOG_INFO, "Created QUIC client connection to %s (migration=%s)",
            server_name, qconn->migration_enabled ? "enabled" : "disabled");
 
@@ -369,6 +376,11 @@ quic_conn_t *quic_conn_new_server(quiche_config *config, const uint8_t *dcid, si
 	qconn->current_delay_ms = 0;
 	qconn->retry_scheduled = false;
 	memset(&qconn->next_retry_time, 0, sizeof(qconn->next_retry_time));
+
+	/* Initialize keep-alive state */
+	qconn->keepalive_enabled = quic_keepalive_enabled;
+	gettimeofday(&qconn->last_activity, NULL);
+	memset(&qconn->next_ping_time, 0, sizeof(qconn->next_ping_time));
 
 	logger(DEBUG_PROTOCOL, LOG_INFO, "Accepted QUIC server connection (migration=%s)",
 	       qconn->migration_enabled ? "enabled" : "disabled");
