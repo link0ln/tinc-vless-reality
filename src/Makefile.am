@@ -48,6 +48,9 @@ vless_SOURCES = \
 quic_SOURCES = \
 	quic/quic.c quic/quic.h \
 	quic/quic_transport.c quic/quic_transport.h \
+	quic/quic_migration.c \
+	quic/quic_maintenance.c \
+	quic/quic_internal.h \
 	quic/quic_reality.c quic/quic_reality.h \
 	quic/quic_fingerprint.c quic/quic_fingerprint.h
 
