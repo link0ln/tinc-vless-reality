@@ -182,5 +182,6 @@ extern ssize_t quic_conn_stream_recv(quic_conn_t *qconn, uint64_t stream_id, uin
 /* Utility functions */
 extern const char *quic_state_to_string(quic_state_t state);
 extern void quic_conn_set_node(quic_conn_t *qconn, void *node);
+extern const char *quic_trace_id(const quiche_conn *conn);
 
 #endif /* TINC_QUIC_H */

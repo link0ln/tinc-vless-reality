@@ -62,7 +62,7 @@ static const size_t DEFAULT_ALPN_LEN = sizeof(DEFAULT_ALPN) - 1;
 static bool quic_initialized = false;
 
 /* Return stable hex string for quiche connection trace id */
-static const char *quic_trace_id(const quiche_conn *conn) {
+const char *quic_trace_id(const quiche_conn *conn) {
     static char buf[96];
     const uint8_t *id = NULL;
     size_t len = 0;
