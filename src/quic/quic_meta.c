@@ -204,16 +204,17 @@ ssize_t quic_meta_recv(quic_conn_t *qconn, int64_t stream_id,
 		return -1;
 	}
 
-	logger(DEBUG_PROTOCOL, LOG_INFO, "quic_meta_recv: Attempting to read from stream %ld (buf_len=%zu, handshake_complete=%d)",
-	       stream_id, buf_len, qconn->handshake_complete);
+	const char *trace_id = quic_trace_id(qconn->conn);
+	logger(DEBUG_PROTOCOL, LOG_INFO, "quic_meta_recv[%s]: Attempting to read from stream %ld (qconn=%p buf_len=%zu)",
+	       trace_id, stream_id, (void*)qconn, buf_len);
 
 	bool fin = false;
 	uint64_t error_code = 0;
 	ssize_t recv_len = quiche_conn_stream_recv(qconn->conn, (uint64_t)stream_id,
 	                                             buf, buf_len, &fin, &error_code);
 
-	logger(DEBUG_PROTOCOL, LOG_INFO, "quic_meta_recv: quiche_conn_stream_recv returned %zd (fin=%d, error_code=%lu)",
-	       recv_len, fin, error_code);
+	logger(DEBUG_PROTOCOL, LOG_INFO, "quic_meta_recv[%s]: quiche_conn_stream_recv returned %zd (fin=%d, error_code=%lu)",
+	       trace_id, recv_len, fin, error_code);
 
 	if(recv_len < 0) {
 		if(recv_len == QUICHE_ERR_DONE) {
