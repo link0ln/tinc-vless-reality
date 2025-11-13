@@ -232,10 +232,11 @@ bool receive_meta(connection_t *c) {
 			}
 		}
 
-		/* Check if stream has data */
-		if(!quic_meta_stream_readable(qconn, c->quic_stream_id)) {
-			return true;  /* No data yet, not an error */
-		}
+		/* Try to read from QUIC stream directly.
+		 * quiche_conn_recv() may have already processed STREAM frames,
+		 * so quiche_conn_readable() iterator might be empty even though
+		 * data is available in stream buffers. Let quic_meta_recv() handle this -
+		 * it will return 0 (QUICHE_ERR_DONE) if no data is available. */
 
 		/* Read from QUIC stream */
 		inlen = quic_meta_recv(qconn, c->quic_stream_id,
