@@ -46,14 +46,12 @@ static timeout_t retry_timer;
 static void quic_keepalive_task(void *data);
 static void quic_cleanup_task(void *data);
 static void quic_retry_task(void *data);
-static void init_retry_state(quic_conn_t *qconn);
-static void init_keepalive_state(quic_conn_t *qconn);
 
 /* ============================================================================
  * Keep-Alive Mechanism
  * ============================================================================ */
 
-static void init_keepalive_state(quic_conn_t *qconn) {
+void quic_maintenance_init_keepalive(quic_conn_t *qconn) {
 	if(!qconn) return;
 
 	qconn->keepalive_enabled = quic_keepalive_enabled;
@@ -307,7 +305,7 @@ static void quic_cleanup_task(void *data) {
  * Initialize retry state for a connection
  * Sets initial values for exponential backoff algorithm
  */
-static void init_retry_state(quic_conn_t *qconn) {
+void quic_maintenance_init_retry(quic_conn_t *qconn) {
 	if(!qconn) return;
 
 	qconn->retry_count = 0;
@@ -458,7 +456,7 @@ static void quic_retry_task(void *data) {
 			logger(DEBUG_PROTOCOL, LOG_INFO,
 			       "Connection recovered without retry (after %u attempts)",
 			       qconn->retry_count);
-			init_retry_state(qconn);  /* Reset retry state */
+			quic_maintenance_init_retry(qconn);  /* Reset retry state */
 			succeeded++;
 			continue;
 		}
@@ -483,7 +481,7 @@ static void quic_retry_task(void *data) {
 			/* Connection is in progress, wait for it */
 			logger(DEBUG_PROTOCOL, LOG_DEBUG,
 			       "Connection in progress, resetting retry state");
-			init_retry_state(qconn);
+			quic_maintenance_init_retry(qconn);
 			succeeded++;
 		}
 	}
