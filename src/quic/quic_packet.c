@@ -16,10 +16,10 @@
 #include "system.h"
 
 #include <sys/socket.h>
-<parameter name="netinet/in.h">
-<parameter name="arpa/inet.h">
-<parameter name="string.h">
-<parameter name="quiche.h">
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <string.h>
+#include <quiche.h>
 
 #include "quic_internal.h"
 #include "quic.h"
