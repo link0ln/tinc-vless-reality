@@ -79,6 +79,8 @@ extern void quic_migration_exit(void);
 extern bool quic_maintenance_init(void);
 extern void quic_maintenance_exit(void);
 extern void quic_maintenance_update_activity(quic_conn_t *qconn);
+extern void quic_maintenance_init_keepalive(quic_conn_t *qconn);
+extern void quic_maintenance_init_retry(quic_conn_t *qconn);
 
 /* ============================================================================
  * Utility Functions
