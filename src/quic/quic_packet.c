@@ -611,7 +611,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						       (long)c->quic_stream_id, c->name);
 
 						/* Call receive_meta to process metadata from QUIC stream */
-						if(!receive_meta(c)) {
+						if(!receive_meta(c, qconn)) {
 							logger(DEBUG_PROTOCOL, LOG_ERR, "Error processing meta data from QUIC stream %ld",
 							       (long)c->quic_stream_id);
 						}
@@ -660,7 +660,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing metadata for unbound connection (stream %ld)",
 						       (long)uc->quic_stream_id);
 						/* receive_meta() now handles unbound connections by looking up qconn by address */
-						if(!receive_meta(uc)) {
+						if(!receive_meta(uc, qconn)) {
 							logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process metadata from unbound connection");
 						}
 					}

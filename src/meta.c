@@ -189,7 +189,7 @@ bool receive_meta_sptps(void *handle, uint8_t type, const void *vdata, uint16_t 
 	return receive_request(c, data);
 }
 
-bool receive_meta(connection_t *c) {
+bool receive_meta(connection_t *c, quic_conn_t *qconn) {
 	ssize_t inlen;
 	char inbuf[MAXBUFSIZE];
 	char *bufp = inbuf, *endp;
@@ -212,23 +212,26 @@ bool receive_meta(connection_t *c) {
 
 	/* QUIC meta-connection receive path */
 	if(c->quic_stream_id >= 0 && c->status.quic_meta) {
-		quic_conn_t *qconn = NULL;
+		quic_conn_t *qconn_local = qconn;  /* Use provided qconn if available */
 
-		/* For unbound connections (server-side before ID received), we don't have c->node yet */
-		if(c->node) {
-			/* Normal path: connection is bound to a node */
-			qconn = quic_transport_get_connection(c->node, NULL);
-			if(!qconn) {
-				logger(DEBUG_META, LOG_ERR, "No QUIC connection for node %s", c->node->name);
-				return false;
-			}
-		} else {
-			/* Unbound connection: lookup by connection address */
-			logger(DEBUG_META, LOG_DEBUG, "QUIC meta-connection without node (unbound), looking up by address");
-			qconn = quic_find_connection_by_address(&c->address);
-			if(!qconn) {
-				logger(DEBUG_META, LOG_ERR, "No QUIC connection for unbound connection from %s", c->hostname);
-				return false;
+		/* If qconn not provided, look it up */
+		if(!qconn_local) {
+			/* For unbound connections (server-side before ID received), we don't have c->node yet */
+			if(c->node) {
+				/* Normal path: connection is bound to a node */
+				qconn_local = quic_transport_get_connection(c->node, NULL);
+				if(!qconn_local) {
+					logger(DEBUG_META, LOG_ERR, "No QUIC connection for node %s", c->node->name);
+					return false;
+				}
+			} else {
+				/* Unbound connection: lookup by connection address */
+				logger(DEBUG_META, LOG_DEBUG, "QUIC meta-connection without node (unbound), looking up by address");
+				qconn_local = quic_find_connection_by_address(&c->address);
+				if(!qconn_local) {
+					logger(DEBUG_META, LOG_ERR, "No QUIC connection for unbound connection from %s", c->hostname);
+					return false;
+				}
 			}
 		}
 
@@ -239,7 +242,7 @@ bool receive_meta(connection_t *c) {
 		 * it will return 0 (QUICHE_ERR_DONE) if no data is available. */
 
 		/* Read from QUIC stream */
-		inlen = quic_meta_recv(qconn, c->quic_stream_id,
+		inlen = quic_meta_recv(qconn_local, c->quic_stream_id,
 		                        (uint8_t *)inbuf, sizeof(inbuf) - c->inbuf.len);
 
 		if(inlen < 0) {

@@ -301,7 +301,7 @@ static void periodic_handler(void *data) {
 }
 
 void handle_meta_connection_data(connection_t *c) {
-	if(!receive_meta(c)) {
+	if(!receive_meta(c, NULL)) {
 		if(!c->status.control) {
 			c->status.tarpit = true;
 		}

@@ -23,11 +23,14 @@
 
 #include "connection.h"
 
+/* Forward declarations */
+struct quic_conn;
+
 extern bool send_meta(struct connection_t *c, const char *buffer, size_t length);
 extern void send_meta_raw(struct connection_t *c, const char *buffer, size_t length);
 extern bool send_meta_sptps(void *handle, uint8_t type, const void *data, size_t length);
 extern bool receive_meta_sptps(void *handle, uint8_t type, const void *data, uint16_t length);
 extern void broadcast_meta(struct connection_t *from, const char *buffer, size_t length);
-extern bool receive_meta(struct connection_t *c);
+extern bool receive_meta(struct connection_t *c, struct quic_conn *qconn);
 
 #endif
