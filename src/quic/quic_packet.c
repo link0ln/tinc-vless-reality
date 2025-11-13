@@ -418,29 +418,10 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 
 								logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for incoming QUIC from %s", candidate->name);
 
-								/* Initialize meta protocol if handshake is already complete */
-								if(quic_conn_is_established(qconn) && !c->status.meta_protocol_initiated) {
-									logger(DEBUG_PROTOCOL, LOG_INFO, "Initializing meta protocol for bound incoming QUIC from %s", candidate->name);
-
-									/* Server receives client data on client-initiated stream 0 */
-									if(c->quic_stream_id < 0) {
-										c->quic_stream_id = 0;
-										logger(DEBUG_PROTOCOL, LOG_INFO, "Assigned stream 0 for meta protocol");
-									}
-
-									/* Mark as initiated */
-									c->status.meta_protocol_initiated = 1;
-									c->status.connecting = false;
-
-									/* Send ID message */
-									logger(DEBUG_PROTOCOL, LOG_INFO, "Sending ID message to %s via QUIC stream %ld", candidate->name, (long)c->quic_stream_id);
-									if(!send_id(c)) {
-										logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to send ID to %s", candidate->name);
-									} else {
-										/* Flush immediately */
-										quic_transport_flush_meta(c);
-									}
-								}
+								/* NOTE: Do NOT initialize meta protocol here, even if handshake is complete.
+								 * Meta protocol initialization will be handled by the code at line 510-573
+								 * when the next packet is processed after handshake completes.
+								 * This ensures proper stream setup and avoids race conditions. */
 							}
 							break;
 						}
