@@ -600,37 +600,20 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC checking connection: name=%s, quic_meta=%d, quic_stream_id=%ld, outgoing=%p",
 					       c->name ? c->name : "NULL", c->status.quic_meta, (long)c->quic_stream_id, (void*)c->outgoing);
 
-					/* If this connection has a QUIC meta stream, check for readable data */
-					if(c->status.quic_meta) {
-						/* Stream discovery: if stream_id not yet set, find the first readable stream */
-						if(c->quic_stream_id < 0) {
-							logger(DEBUG_PROTOCOL, LOG_INFO, "Attempting stream discovery for %s", c->name);
-							quiche_stream_iter *readable = quiche_conn_readable(qconn->conn);
-							if(readable) {
-								uint64_t stream_id;
-								if(quiche_stream_iter_next(readable, &stream_id)) {
-									c->quic_stream_id = stream_id;
-									logger(DEBUG_PROTOCOL, LOG_INFO, "Discovered QUIC meta stream %ld from %s",
-									       (long)stream_id, c->name);
-								} else {
-									logger(DEBUG_PROTOCOL, LOG_DEBUG, "No readable streams yet for %s", c->name);
-								}
-								quiche_stream_iter_free(readable);
-							} else {
-								logger(DEBUG_PROTOCOL, LOG_DEBUG, "quiche_conn_readable returned NULL for %s", c->name);
-							}
-						}
+					/* If this connection has a QUIC meta stream, try to read data from it.
+					 * Don't check quic_meta_stream_readable() here because quiche_conn_recv()
+					 * has already processed STREAM frames and buffered the data internally.
+					 * By the time we check quiche_conn_readable(), it may return an empty iterator
+					 * even though stream data is available. Instead, let receive_meta() ->
+					 * quic_meta_recv() try to read directly - it will return 0 if no data. */
+					if(c->status.quic_meta && c->quic_stream_id >= 0) {
+						logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing QUIC meta stream %ld for %s",
+						       (long)c->quic_stream_id, c->name);
 
-						/* Now check if we have a stream and if it has readable data */
-						if(c->quic_stream_id >= 0 && quic_meta_stream_readable(qconn, c->quic_stream_id)) {
-							logger(DEBUG_PROTOCOL, LOG_DEBUG, "QUIC meta stream %ld has readable data from %s",
-							       (long)c->quic_stream_id, c->name);
-
-							/* Call receive_meta to process metadata from QUIC stream */
-							if(!receive_meta(c)) {
-								logger(DEBUG_PROTOCOL, LOG_ERR, "Error processing meta data from QUIC stream %ld",
-								       (long)c->quic_stream_id);
-							}
+						/* Call receive_meta to process metadata from QUIC stream */
+						if(!receive_meta(c)) {
+							logger(DEBUG_PROTOCOL, LOG_ERR, "Error processing meta data from QUIC stream %ld",
+							       (long)c->quic_stream_id);
 						}
 					}
 				}
@@ -669,11 +652,12 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						}
 					}
 
-					/* For unbound connections, check if stream has readable data before processing.
-					 * Only call receive_meta() when stream actually has data to avoid
-					 * QUICHE_ERR_INVALID_STREAM_STATE (-7) errors */
-					if(uc->quic_stream_id >= 0 && quic_meta_stream_readable(qconn, uc->quic_stream_id)) {
-						logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing metadata for unbound connection (stream %ld has data)",
+					/* For unbound connections, try to read metadata from QUIC stream.
+					 * Don't check quic_meta_stream_readable() - same reasoning as for bound connections.
+					 * quiche has already buffered STREAM data during quiche_conn_recv().
+					 * Let receive_meta() -> quic_meta_recv() try to read directly. */
+					if(uc->quic_stream_id >= 0) {
+						logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing metadata for unbound connection (stream %ld)",
 						       (long)uc->quic_stream_id);
 						/* receive_meta() now handles unbound connections by looking up qconn by address */
 						if(!receive_meta(uc)) {
