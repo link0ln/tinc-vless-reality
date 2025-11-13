@@ -669,10 +669,12 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 						}
 					}
 
-					/* For unbound connections, process metadata through receive_meta()
-					 * which will handle reading and parsing the ID message */
-					if(uc->quic_stream_id >= 0) {
-						logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing metadata for unbound connection");
+					/* For unbound connections, check if stream has readable data before processing.
+					 * Only call receive_meta() when stream actually has data to avoid
+					 * QUICHE_ERR_INVALID_STREAM_STATE (-7) errors */
+					if(uc->quic_stream_id >= 0 && quic_meta_stream_readable(qconn, uc->quic_stream_id)) {
+						logger(DEBUG_PROTOCOL, LOG_DEBUG, "Processing metadata for unbound connection (stream %ld has data)",
+						       (long)uc->quic_stream_id);
 						/* receive_meta() now handles unbound connections by looking up qconn by address */
 						if(!receive_meta(uc)) {
 							logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to process metadata from unbound connection");
