@@ -11,9 +11,10 @@
 #ifndef TINC_QUIC_INTERNAL_H
 #define TINC_QUIC_INTERNAL_H
 
-#include "quic_transport.h"
+#include "../netutl.h"
 #include "../connection.h"
 #include "../node.h"
+#include "quic_transport.h"
 
 /* Local connection ID length (matches scid_len in quic_conn_new_server) */
 #define LOCAL_CONN_ID_LEN 16
