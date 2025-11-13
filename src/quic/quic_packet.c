@@ -417,6 +417,30 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 								candidate->connection = c;
 
 								logger(DEBUG_PROTOCOL, LOG_INFO, "Created connection_t for incoming QUIC from %s", candidate->name);
+
+								/* Initialize meta protocol if handshake is already complete */
+								if(quic_conn_is_established(qconn) && !c->status.meta_protocol_initiated) {
+									logger(DEBUG_PROTOCOL, LOG_INFO, "Initializing meta protocol for bound incoming QUIC from %s", candidate->name);
+
+									/* Server receives client data on client-initiated stream 0 */
+									if(c->quic_stream_id < 0) {
+										c->quic_stream_id = 0;
+										logger(DEBUG_PROTOCOL, LOG_INFO, "Assigned stream 0 for meta protocol");
+									}
+
+									/* Mark as initiated */
+									c->status.meta_protocol_initiated = 1;
+									c->status.connecting = false;
+
+									/* Send ID message */
+									logger(DEBUG_PROTOCOL, LOG_INFO, "Sending ID message to %s via QUIC stream %ld", candidate->name, (long)c->quic_stream_id);
+									if(!send_id(c)) {
+										logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to send ID to %s", candidate->name);
+									} else {
+										/* Flush immediately */
+										quic_transport_flush_meta(c);
+									}
+								}
 							}
 							break;
 						}
@@ -636,14 +660,32 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 				if(uc) {
 					logger(DEBUG_PROTOCOL, LOG_DEBUG, "Found unbound connection for peer: hostname=%s, quic_stream_id=%ld",
 					       uc->hostname ? uc->hostname : "NULL", (long)uc->quic_stream_id);
-					/* Discover stream if needed */
-					if(uc->quic_stream_id < 0) {
-						/* Directly assign stream 0 - clients always use bidirectional stream 0 for metadata */
-						uc->quic_stream_id = 0;
-						logger(DEBUG_PROTOCOL, LOG_INFO, "Assigned stream 0 to unbound peer %s (clients always use stream 0)",
+
+					/* Initialize meta protocol for unbound connections after handshake */
+					if(quic_conn_is_established(qconn) && !uc->status.meta_protocol_initiated) {
+						logger(DEBUG_PROTOCOL, LOG_INFO, "Initializing meta protocol for unbound QUIC connection from %s",
 						       uc->hostname ? uc->hostname : "NULL");
-					} else {
-						logger(DEBUG_PROTOCOL, LOG_DEBUG, "Unbound connection already has stream_id=%ld", (long)uc->quic_stream_id);
+
+						/* Server receives client data on client-initiated stream 0
+						 * Clients always use bidirectional stream 0 for metadata */
+						if(uc->quic_stream_id < 0) {
+							uc->quic_stream_id = 0;
+							logger(DEBUG_PROTOCOL, LOG_INFO, "Assigned stream 0 for meta protocol (client-initiated bidirectional)");
+						}
+
+						/* Mark as initiated before calling send_id to avoid recursion */
+						uc->status.meta_protocol_initiated = 1;
+						uc->last_ping_time = now.tv_sec;
+						uc->status.connecting = false;
+
+						/* Send ID message to client over QUIC stream 0 */
+						logger(DEBUG_PROTOCOL, LOG_INFO, "Sending ID message to unbound peer via QUIC stream %ld", (long)uc->quic_stream_id);
+						if(!send_id(uc)) {
+							logger(DEBUG_PROTOCOL, LOG_ERR, "Failed to send ID to unbound peer");
+						} else {
+							/* Flush the ID message immediately */
+							quic_transport_flush_meta(uc);
+						}
 					}
 
 					/* For unbound connections, process metadata through receive_meta()
