@@ -1323,6 +1323,45 @@ bool setup_network(void) {
 		}
 	}
 
+	/* QUIC Advanced Settings */
+	get_config_bool(lookup_config(config_tree, "QuicMigrationEnabled"), &quic_migration_enabled);
+
+	int hop_interval_sec = 0;
+	if(get_config_int(lookup_config(config_tree, "QuicHopInterval"), &hop_interval_sec)) {
+		quic_hop_interval_ms = hop_interval_sec * 1000; /* Convert seconds to milliseconds */
+	}
+
+	if(quic_migration_enabled) {
+		logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Connection Migration enabled (hop interval: %d seconds)",
+		       quic_hop_interval_ms / 1000);
+	}
+
+	/* QUIC Retry Settings */
+	get_config_int(lookup_config(config_tree, "QuicRetryMaxDelay"), &quic_retry_max_delay_ms);
+	get_config_int(lookup_config(config_tree, "QuicRetryInitialDelay"), &quic_retry_initial_delay_ms);
+	get_config_bool(lookup_config(config_tree, "QuicRetryJitterEnabled"), &quic_retry_jitter_enabled);
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Retry: max_delay=%dms, initial_delay=%dms, jitter=%s",
+	       quic_retry_max_delay_ms, quic_retry_initial_delay_ms,
+	       quic_retry_jitter_enabled ? "enabled" : "disabled");
+
+	/* QUIC Keep-Alive Settings */
+	get_config_bool(lookup_config(config_tree, "QuicKeepAliveEnabled"), &quic_keepalive_enabled);
+	get_config_int(lookup_config(config_tree, "QuicKeepAliveInterval"), &quic_keepalive_interval_ms);
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Keep-Alive: %s (interval=%dms)",
+	       quic_keepalive_enabled ? "enabled" : "disabled",
+	       quic_keepalive_interval_ms);
+
+	/* QUIC Session Cleanup Settings */
+	get_config_bool(lookup_config(config_tree, "QuicCleanupEnabled"), &quic_cleanup_enabled);
+	get_config_int(lookup_config(config_tree, "QuicCleanupInterval"), &quic_cleanup_interval_ms);
+	get_config_int(lookup_config(config_tree, "QuicSessionMaxIdle"), &quic_session_max_idle_ms);
+
+	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Cleanup: %s (interval=%dms, max_idle=%dms)",
+	       quic_cleanup_enabled ? "enabled" : "disabled",
+	       quic_cleanup_interval_ms, quic_session_max_idle_ms);
+
 	if(!setup_myself()) {
 		return false;
 	}

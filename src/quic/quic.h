@@ -87,6 +87,23 @@ typedef struct quic_conn_t {
 	uint64_t packets_sent;
 	uint64_t packets_received;
 
+	/* Connection migration support */
+	bool migration_enabled;         // migration allowed for this connection
+	struct timeval last_migration;  // timestamp of last migration
+	int old_sock_fd;                // previous socket (draining)
+	struct timeval old_fd_close_time; // when to close old_sock_fd
+
+	/* Retry logic with exponential backoff */
+	uint32_t retry_count;           // number of retry attempts
+	uint32_t current_delay_ms;      // current retry delay in milliseconds
+	struct timeval next_retry_time; // when to attempt next retry
+	bool retry_scheduled;           // retry timer is active
+
+	/* Keep-alive mechanism */
+	bool keepalive_enabled;         // keep-alive enabled for this connection
+	struct timeval last_activity;   // timestamp of last packet sent/received
+	struct timeval next_ping_time;  // when to send next PING
+
 	/* Linked to tinc node */
 	void *node;                     // node_t * (to avoid circular deps)
 } quic_conn_t;
