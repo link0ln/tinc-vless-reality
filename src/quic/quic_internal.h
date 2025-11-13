@@ -56,6 +56,7 @@ extern bool quic_transport_send_packet(node_t *node, struct vpn_packet_t *packet
  * Meta Protocol (quic_meta.c)
  * ============================================================================ */
 
+extern connection_t *find_unbound_quic_meta_for_peer(const quic_conn_t *qconn);
 extern int64_t quic_meta_create_stream(quic_conn_t *qconn);
 extern ssize_t quic_meta_send(quic_conn_t *qconn, int64_t stream_id,
                                const uint8_t *data, size_t len);
