@@ -193,20 +193,27 @@ ssize_t quic_meta_send(quic_conn_t *qconn, int64_t stream_id,
 ssize_t quic_meta_recv(quic_conn_t *qconn, int64_t stream_id,
                         uint8_t *buf, size_t buf_len) {
 	if(!qconn || !qconn->conn || stream_id < 0 || !buf || buf_len == 0) {
-		logger(DEBUG_PROTOCOL, LOG_ERR, "quic_meta_recv: invalid parameters");
+		logger(DEBUG_PROTOCOL, LOG_ERR, "quic_meta_recv: invalid parameters (qconn=%p conn=%p stream_id=%ld buf=%p buf_len=%zu)",
+		       (void*)qconn, qconn ? (void*)qconn->conn : NULL, stream_id, (void*)buf, buf_len);
 		return -1;
 	}
 
 	/* Check if handshake is complete */
 	if(!qconn->handshake_complete) {
-		logger(DEBUG_PROTOCOL, LOG_DEBUG, "quic_meta_recv: handshake not complete yet");
+		logger(DEBUG_PROTOCOL, LOG_DEBUG, "quic_meta_recv: handshake not complete yet for stream %ld", stream_id);
 		return -1;
 	}
+
+	logger(DEBUG_PROTOCOL, LOG_INFO, "quic_meta_recv: Attempting to read from stream %ld (buf_len=%zu, handshake_complete=%d)",
+	       stream_id, buf_len, qconn->handshake_complete);
 
 	bool fin = false;
 	uint64_t error_code = 0;
 	ssize_t recv_len = quiche_conn_stream_recv(qconn->conn, (uint64_t)stream_id,
 	                                             buf, buf_len, &fin, &error_code);
+
+	logger(DEBUG_PROTOCOL, LOG_INFO, "quic_meta_recv: quiche_conn_stream_recv returned %zd (fin=%d, error_code=%lu)",
+	       recv_len, fin, error_code);
 
 	if(recv_len < 0) {
 		if(recv_len == QUICHE_ERR_DONE) {
