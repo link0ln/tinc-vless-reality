@@ -1,5 +1,5 @@
 ===========================================
-TINC QUIC TEST - Чт 13 ноя 2025 20:57:04 UTC
+TINC QUIC TEST - Чт 13 ноя 2025 21:12:46 UTC
 ===========================================
 
 === Building Docker images ===
@@ -8,7 +8,18 @@ TINC QUIC TEST - Чт 13 ноя 2025 20:57:04 UTC
 #1 DONE 0.0s
 
 #2 [internal] load build definition from Dockerfile.optimized
+#2 transferring dockerfile:
 #2 transferring dockerfile: 3.20kB done
 #2 DONE 0.0s
 
 #3 [internal] load metadata for docker.io/library/ubuntu:22.04
+#3 DONE 1.4s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 616B done
+#4 DONE 0.0s
+
+#5 [tinc-builder 1/9] FROM docker.io/library/ubuntu:22.04@sha256:09506232a8004baa32c47d68f1e5c307d648fdd59f5e7eaa42aaf87914100db3
+#5 CACHED
+
+#6 [internal] load build context
