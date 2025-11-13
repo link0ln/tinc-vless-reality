@@ -212,6 +212,11 @@ ssize_t quic_meta_recv(quic_conn_t *qconn, int64_t stream_id,
 		if(recv_len == QUICHE_ERR_DONE) {
 			/* No data available right now, not an error */
 			return 0;
+		} else if(recv_len == -7) {  /* QUICHE_ERR_INVALID_STREAM_STATE */
+			/* Stream not ready for reading yet, or already fully read.
+			 * This happens when we try to read from a stream that has no data buffered.
+			 * Not an error in our usage pattern - just return 0 (no data). */
+			return 0;
 		} else if(recv_len == QUICHE_ERR_STREAM_RESET) {
 			logger(DEBUG_PROTOCOL, LOG_WARNING, "Stream %ld reset by peer (error: %lu)",
 			       stream_id, error_code);
