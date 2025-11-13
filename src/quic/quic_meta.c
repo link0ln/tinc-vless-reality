@@ -301,8 +301,24 @@ int64_t quic_meta_next_readable(quic_conn_t *qconn) {
 
 /* Public helper to flush meta outbuf via QUIC for given connection's node */
 void quic_transport_flush_meta(connection_t *c) {
-	if(!c || !c->node) return;
-	quic_conn_t *qconn = quic_transport_get_connection(c->node, NULL);
-	if(!qconn) return;
+	if(!c) return;
+
+	quic_conn_t *qconn = NULL;
+
+	if(c->node) {
+		/* Bound connection: lookup by node */
+		qconn = quic_transport_get_connection(c->node, NULL);
+	} else {
+		/* Unbound connection: lookup by address */
+		logger(DEBUG_META, LOG_DEBUG, "Flushing meta for unbound connection, looking up by address %s", c->hostname);
+		qconn = quic_find_connection_by_address(&c->address);
+	}
+
+	if(!qconn) {
+		logger(DEBUG_META, LOG_DEBUG, "No QUIC connection found for flush, node=%p hostname=%s",
+		       (void*)c->node, c->hostname ? c->hostname : "NULL");
+		return;
+	}
+
 	quic_flush_meta_outbuf(c, qconn);
 }
