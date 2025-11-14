@@ -375,7 +375,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 							char ip1[INET_ADDRSTRLEN], ip2[INET_ADDRSTRLEN];
 							inet_ntop(AF_INET, &addr1->sin_addr, ip1, INET_ADDRSTRLEN);
 							inet_ntop(AF_INET, &addr2->sin_addr, ip2, INET_ADDRSTRLEN);
-							logger(DEBUG_PROTOCOL, LOG_DEBUG, "    IPv4 compare: candidate=%s peer=%s", ip1, ip2);
+							logger(DEBUG_PROTOCOL, LOG_INFO, "    IPv4 compare: candidate=%s peer=%s", ip1, ip2);
 
 							match = (memcmp(&addr1->sin_addr, &addr2->sin_addr, sizeof(addr1->sin_addr)) == 0);
 						} else if(candidate->address.sa.sa_family == AF_INET6) {
@@ -386,7 +386,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 							char ip1[INET6_ADDRSTRLEN], ip2[INET6_ADDRSTRLEN];
 							inet_ntop(AF_INET6, &addr1->sin6_addr, ip1, INET6_ADDRSTRLEN);
 							inet_ntop(AF_INET6, &addr2->sin6_addr, ip2, INET6_ADDRSTRLEN);
-							logger(DEBUG_PROTOCOL, LOG_DEBUG, "    IPv6 compare: candidate=%s peer=%s", ip1, ip2);
+							logger(DEBUG_PROTOCOL, LOG_INFO, "    IPv6 compare: candidate=%s peer=%s", ip1, ip2);
 
 							match = (memcmp(&addr1->sin6_addr, &addr2->sin6_addr, sizeof(addr1->sin6_addr)) == 0);
 						}
