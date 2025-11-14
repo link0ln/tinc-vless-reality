@@ -344,7 +344,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 			if(is_established && !qconn->node && qconn->peer_addr.ss_family != 0) {
 				/* Server-side connection needs node binding */
 				char *peer_hostname = sockaddr2hostname((sockaddr_t *)&qconn->peer_addr);
-				logger(DEBUG_PROTOCOL, LOG_DEBUG, "Server connection established from %s (family=%d), attempting to bind node",
+				logger(DEBUG_PROTOCOL, LOG_INFO, "Server connection established from %s (family=%d), attempting to bind node",
 				       peer_hostname, qconn->peer_addr.ss_family);
 				free(peer_hostname);
 
@@ -358,7 +358,7 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 					/* Debug: log each candidate node */
 					if(candidate) {
 						char *cand_hostname = sockaddr2hostname(&candidate->address);
-						logger(DEBUG_PROTOCOL, LOG_DEBUG, "  Checking node '%s': addr=%s family=%d",
+						logger(DEBUG_PROTOCOL, LOG_INFO, "  Checking node '%s': addr=%s family=%d",
 						       candidate->name ? candidate->name : "NULL",
 						       cand_hostname,
 						       candidate->address.sa.sa_family);
