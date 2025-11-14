@@ -348,6 +348,9 @@ void quic_transport_handle_packet(const uint8_t *buf, size_t len,
 				       peer_hostname, qconn->peer_addr.ss_family);
 				free(peer_hostname);
 
+				logger(DEBUG_PROTOCOL, LOG_INFO, "Attempting to bind node: node_tree=%p node_tree->head=%p",
+				       (void*)node_tree, node_tree ? (void*)node_tree->head : NULL);
+
 				/* Find node by peer address */
 				for(splay_node_t *n = node_tree->head; n; n = n->next) {
 					node_t *candidate = (node_t *)n->data;
