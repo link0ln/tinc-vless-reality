@@ -1,0 +1,63 @@
+# Docker ignore file to speed up build context
+
+# Docker files
+docker/node1/
+docker/node2/
+docker/node3/
+docker/*.log
+docker/.env
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README*
+CHANGELOG*
+LICENSE*
+docs/
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.lo
+*.la
+.libs/
+.deps/
+*.status
+config.log
+autom4te.cache/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+docker/logs/
+*.err
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Test files (keep test/ for autoreconf)
+tests/
+*.test
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Other
+*.bak
+*.orig

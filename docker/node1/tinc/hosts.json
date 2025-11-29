@@ -1,0 +1,28 @@
+{
+  "nodes": {
+    "node3": {
+      "addresses": ["172.25.1.12"],
+      "port": 443,
+      "subnet": "10.0.0.3/32",
+      "vpn_address": "10.0.0.3",
+      "vless_uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "authorized": true
+    },
+    "node2": {
+      "addresses": ["172.25.1.11"],
+      "port": 443,
+      "subnet": "10.0.0.2/32",
+      "vpn_address": "10.0.0.2",
+      "vless_uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "authorized": true
+    },
+    "node1": {
+      "addresses": ["172.25.1.10"],
+      "port": 443,
+      "subnet": "10.0.0.1/32",
+      "vpn_address": "10.0.0.1",
+      "vless_uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "authorized": true
+    }
+  }
+}

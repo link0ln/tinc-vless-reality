@@ -1,0 +1,97 @@
+#ifndef TINC_CONF_H
+#define TINC_CONF_H
+
+/*
+    conf.h -- header for conf.c
+    Copyright (C) 1998-2005 Ivo Timmermans
+                  2000-2013 Guus Sliepen <guus@tinc-vpn.org>
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along
+    with this program; if not, write to the Free Software Foundation, Inc.,
+    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
+#include "list.h"
+#include "splay_tree.h"
+#include "subnet.h"
+
+typedef struct config_t {
+	char *variable;
+	char *value;
+	char *file;
+	int line;
+} config_t;
+
+
+extern splay_tree_t *config_tree;
+
+extern int pinginterval;
+extern int pingtimeout;
+extern int maxtimeout;
+extern bool bypass_security;
+extern list_t *cmdline_conf;
+
+/* VLESS Protocol Configuration */
+extern bool vless_mode;
+extern char *vless_uuid;
+extern bool vless_reality_enabled;
+extern char *vless_reality_dest;
+extern int vless_reality_dest_port;
+extern char *vless_reality_server_name;
+extern char *vless_reality_public_key;
+extern char *vless_reality_private_key;
+extern char *vless_reality_short_id;
+extern char *vless_reality_fingerprint;
+
+extern int quic_fallback_mode;          /* 0=no, 1=yes, 2=auto */
+extern bool disable_sptps_with_vless;   /* Disable SPTPS when VLESS active */
+
+/* QUIC Advanced Settings */
+extern bool quic_migration_enabled;     /* Enable connection migration */
+extern int quic_hop_interval_ms;        /* Migration interval in milliseconds */
+
+/* QUIC Retry Settings */
+extern int quic_retry_max_delay_ms;     /* Maximum retry delay (default: 10000 = 10s) */
+extern int quic_retry_initial_delay_ms; /* Initial retry delay (default: 100ms) */
+extern bool quic_retry_jitter_enabled;  /* Add jitter to prevent thundering herd */
+
+/* QUIC Keep-Alive Settings */
+extern bool quic_keepalive_enabled;     /* Enable QUIC keep-alive pings (default: true) */
+extern int quic_keepalive_interval_ms;  /* Keep-alive interval in milliseconds (default: 15000 = 15s) */
+
+/* QUIC Session Cleanup Settings */
+extern bool quic_cleanup_enabled;       /* Enable session cleanup task (default: true) */
+extern int quic_cleanup_interval_ms;    /* Cleanup interval in milliseconds (default: 60000 = 1 minute) */
+extern int quic_session_max_idle_ms;    /* Maximum idle time before cleanup (default: 300000 = 5 minutes) */
+
+extern void init_configuration(splay_tree_t **config_tree);
+extern void exit_configuration(splay_tree_t **config_tree);
+extern config_t *new_config(void) __attribute__((__malloc__));
+extern void free_config(config_t *config);
+extern void config_add(splay_tree_t *config_tree, config_t *config);
+extern config_t *lookup_config(splay_tree_t *config_tree, char *variable);
+extern config_t *lookup_config_next(splay_tree_t *config_tree, const config_t *config);
+extern bool get_config_bool(const config_t *config, bool *result);
+extern bool get_config_int(const config_t *config, int *result);
+extern bool get_config_string(const config_t *config, char **result);
+extern bool get_config_address(const config_t *config, struct addrinfo **result);
+extern bool get_config_subnet(const config_t *config, struct subnet_t **result);
+
+extern config_t *parse_config_line(char *line, const char *fname, int lineno);
+extern bool read_config_file(splay_tree_t *config_tree, const char *filename, bool verbose);
+extern void read_config_options(splay_tree_t *config_tree, const char *prefix);
+extern bool read_server_config(void);
+extern bool read_host_config(splay_tree_t *config_tree, const char *name, bool verbose);
+extern bool append_config_file(const char *name, const char *key, const char *value);
+
+#endif
