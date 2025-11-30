@@ -23,19 +23,19 @@
 #include <stdbool.h>
 
 /*
- * Ensure QUIC TLS certificates exist in the configuration directory.
+ * Ensure TLS certificates exist in the configuration directory.
  *
  * If any of the required certificate files are missing, this function
  * generates new self-signed certificates:
- *   - quic-cert.pem: Node certificate (X.509)
- *   - quic-key.pem: Private key (RSA 2048-bit)
+ *   - tls-cert.pem: Node certificate (X.509)
+ *   - tls-key.pem: Private key (RSA 2048-bit)
  *   - ca.crt: CA certificate (same as node cert for self-signed)
  *
  * @param confbase  Path to the tinc configuration directory
  * @param node_name Name of this node (used as certificate CN)
  * @return true if certificates exist or were generated successfully
  */
-extern bool ensure_quic_certificates(const char *confbase, const char *node_name);
+extern bool ensure_tls_certificates(const char *confbase, const char *node_name);
 
 /*
  * Generate CA key and certificate for invite/join mechanism.

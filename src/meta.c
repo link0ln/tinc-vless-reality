@@ -30,7 +30,6 @@
 #include "utils.h"
 #include "xalloc.h"
 #include "vless/vless.h"
-#include "quic/quic_transport.h"
 
 #ifndef MIN
 static ssize_t MIN(ssize_t x, ssize_t y) {
@@ -61,22 +60,6 @@ bool send_meta(connection_t *c, const char *buffer, size_t length) {
 
 	logger(DEBUG_META, LOG_DEBUG, "Sending %lu bytes of metadata to %s (%s)", (unsigned long)length,
 	       c->name, c->hostname);
-
-	/* QUIC meta-connection routing - buffer for later flushing
-	 * Buffer if quic_meta is set, even if stream_id is -1 (not discovered yet) */
-	if(c->status.quic_meta) {
-		/* Buffer the data in outbuf, will be sent when flushed */
-		if(c->quic_stream_id >= 0) {
-			logger(DEBUG_META, LOG_DEBUG, "QUIC mode: buffering %lu bytes to outbuf for stream %ld",
-			       (unsigned long)length, (long)c->quic_stream_id);
-		} else {
-			logger(DEBUG_META, LOG_DEBUG, "QUIC mode: buffering %lu bytes to outbuf (stream not discovered yet)",
-			       (unsigned long)length);
-		}
-		buffer_add(&c->outbuf, buffer, length);
-		io_set(&c->io, IO_READ | IO_WRITE);
-		return true;
-	}
 
 	/* VLESS/Reality mode - data will be wrapped by handle_meta_write() */
 	if(c->status.vless_enabled && c->vless && c->status.vless_handshake_done) {
@@ -210,64 +193,14 @@ bool receive_meta(connection_t *c) {
 		return false;
 	}
 
-	/* QUIC meta-connection receive path */
-	if(c->quic_stream_id >= 0 && c->status.quic_meta) {
-		quic_conn_t *qconn = NULL;
-
-		/* For unbound connections (server-side before ID received), we don't have c->node yet */
-		if(c->node) {
-			/* Normal path: connection is bound to a node */
-			qconn = quic_transport_get_connection(c->node, NULL);
-			if(!qconn) {
-				logger(DEBUG_META, LOG_ERR, "No QUIC connection for node %s", c->node->name);
-				return false;
-			}
-		} else {
-			/* Unbound connection: lookup by connection address */
-			logger(DEBUG_META, LOG_DEBUG, "QUIC meta-connection without node (unbound), looking up by address");
-			qconn = quic_find_connection_by_address(&c->address);
-			if(!qconn) {
-				logger(DEBUG_META, LOG_ERR, "No QUIC connection for unbound connection from %s", c->hostname);
-				return false;
-			}
-		}
-
-		/* Check if stream has data */
-		if(!quic_meta_stream_readable(qconn, c->quic_stream_id)) {
-			return true;  /* No data yet, not an error */
-		}
-
-		/* Read from QUIC stream */
-		inlen = quic_meta_recv(qconn, c->quic_stream_id,
-		                        (uint8_t *)inbuf, sizeof(inbuf) - c->inbuf.len);
-
-		if(inlen < 0) {
-			logger(DEBUG_META, LOG_ERR, "Failed to receive from QUIC stream %ld",
-			       (long)c->quic_stream_id);
-			return false;
-		}
-
-		if(inlen == 0) {
-			return true;  /* No data available */
-		}
-
-		const char *conn_name = c->name ? c->name : (c->hostname ? c->hostname : "unknown");
-		logger(DEBUG_META, LOG_DEBUG, "Received %zd bytes from QUIC stream %ld from %s",
-		       inlen, (long)c->quic_stream_id, conn_name);
-
-		/* Process the data through normal metadata handling below */
-		bufp = inbuf;
-		goto process_metadata;
+	/* Use VLESS read if VLESS is enabled and handshake is complete */
+	if(c->status.vless_enabled && c->vless && c->status.vless_handshake_done) {
+		logger(DEBUG_META, LOG_DEBUG, "VLESS mode: reading through vless_read()");
+		inlen = vless_read(c->vless, c->socket, inbuf, sizeof(inbuf) - c->inbuf.len);
+	} else {
+		/* Regular TCP recv */
+		inlen = recv(c->socket, inbuf, sizeof(inbuf) - c->inbuf.len, 0);
 	}
-
-    /* Use VLESS read if VLESS is enabled and handshake is complete */
-    if(c->status.vless_enabled && c->vless && c->status.vless_handshake_done) {
-        logger(DEBUG_META, LOG_DEBUG, "VLESS mode: reading through vless_read()");
-        inlen = vless_read(c->vless, c->socket, inbuf, sizeof(inbuf) - c->inbuf.len);
-    } else {
-        /* Regular TCP recv (or QUIC stream handled above) */
-        inlen = recv(c->socket, inbuf, sizeof(inbuf) - c->inbuf.len, 0);
-    }
 
 	if(inlen <= 0) {
 		if(!inlen || !sockerrno) {

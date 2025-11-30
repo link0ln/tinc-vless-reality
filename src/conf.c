@@ -53,29 +53,8 @@ char *vless_reality_private_key = NULL;
 char *vless_reality_short_id = NULL;
 char *vless_reality_fingerprint = NULL;
 
-/* QUIC fallback configuration */
-int quic_fallback_mode = 2;  /* 0=no, 1=yes, 2=auto (default) */
-
 /* Disable SPTPS when VLESS is active (avoid double encryption) */
 bool disable_sptps_with_vless = true;
-
-/* QUIC Advanced Settings */
-bool quic_migration_enabled = false;     /* Connection migration disabled by default */
-int quic_hop_interval_ms = 300000;       /* 5 minutes default (300000ms) */
-
-/* QUIC Retry Settings */
-int quic_retry_max_delay_ms = 10000;     /* Maximum 10 seconds */
-int quic_retry_initial_delay_ms = 100;   /* Start at 100ms */
-bool quic_retry_jitter_enabled = true;   /* Jitter enabled by default */
-
-/* QUIC Keep-Alive Settings */
-bool quic_keepalive_enabled = true;      /* Keep-alive enabled by default */
-int quic_keepalive_interval_ms = 15000;  /* 15 seconds default (15000ms) */
-
-/* QUIC Session Cleanup Settings */
-bool quic_cleanup_enabled = true;        /* Cleanup enabled by default */
-int quic_cleanup_interval_ms = 60000;    /* 1 minute default (60000ms) */
-int quic_session_max_idle_ms = 300000;   /* 5 minutes idle timeout (300000ms) */
 
 static int config_compare(const config_t *a, const config_t *b) {
 	int result;

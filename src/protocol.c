@@ -129,8 +129,6 @@ bool receive_request(connection_t *c, const char *request) {
 	}
 
     int reqno = atoi(request);
-    logger(DEBUG_META, LOG_DEBUG, "receive_request: conn=%p quic_meta=%d allow=%d raw='%s'",
-           (void*)c, c ? c->status.quic_meta : -1, c ? c->allow_request : -1, request);
 
 	if(reqno || *request == '0') {
 		if((reqno < 0) || (reqno >= LAST) || !request_handlers[reqno]) {

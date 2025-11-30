@@ -57,9 +57,6 @@ connection_t *new_connection(void) {
 	c->vless = NULL;
 	c->reality = NULL;
 
-	/* QUIC meta-connection stream ID (-1 = not using QUIC) */
-	c->quic_stream_id = -1;
-
 	return c;
 }
 

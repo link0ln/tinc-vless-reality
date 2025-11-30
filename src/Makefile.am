@@ -33,17 +33,18 @@ vless_SOURCES = \
 	vless/domain_fronting.c vless/domain_fronting.h \
 	vless/multihop.c vless/multihop.h
 
-quic_SOURCES = \
-	quic/quic.c quic/quic.h \
-	quic/quic_transport.c quic/quic_transport.h \
-	quic/quic_connection.c \
-	quic/quic_packet.c \
-	quic/quic_meta.c \
-	quic/quic_migration.c \
-	quic/quic_maintenance.c \
-	quic/quic_internal.h \
-	quic/quic_reality.c quic/quic_reality.h \
-	quic/quic_fingerprint.c quic/quic_fingerprint.h
+# QUIC support disabled for VLESS-only build
+# quic_SOURCES = \
+#	quic/quic.c quic/quic.h \
+#	quic/quic_transport.c quic/quic_transport.h \
+#	quic/quic_connection.c \
+#	quic/quic_packet.c \
+#	quic/quic_meta.c \
+#	quic/quic_migration.c \
+#	quic/quic_maintenance.c \
+#	quic/quic_internal.h \
+#	quic/quic_reality.c quic/quic_reality.h \
+#	quic/quic_fingerprint.c quic/quic_fingerprint.h
 
 tincd_SOURCES = \
 	address_cache.c address_cache.h \
@@ -108,8 +109,7 @@ tincd_SOURCES = \
 	xalloc.h \
 	version.c version.h \
 	$(stub_SOURCES) \
-	$(vless_SOURCES) \
-	$(quic_SOURCES)
+	$(vless_SOURCES)
 
 tinc_SOURCES = \
 	dropin.c dropin.h \
@@ -218,8 +218,8 @@ if TUNEMU
 LIBS += -lpcap
 endif
 
-# QUIC support via quiche
-LIBS += -L$(top_srcdir)/deps/quiche/target/release -lquiche
+# QUIC support disabled for VLESS-only build
+# LIBS += -L$(top_srcdir)/deps/quiche/target/release -lquiche
 
-AM_CFLAGS = -DCONFDIR=\"$(sysconfdir)\" -DRUNSTATEDIR=\"$(runstatedir)\" -DLOCALSTATEDIR=\"$(localstatedir)\" -DSBINDIR=\"$(sbindir)\" -iquote. -I$(top_srcdir)/deps/quiche/quiche/include $(CODE_COVERAGE_CFLAGS)
+AM_CFLAGS = -DCONFDIR=\"$(sysconfdir)\" -DRUNSTATEDIR=\"$(runstatedir)\" -DLOCALSTATEDIR=\"$(localstatedir)\" -DSBINDIR=\"$(sbindir)\" -iquote. $(CODE_COVERAGE_CFLAGS)
 AM_CPPFLAGS = $(CODE_COVERAGE_CPPFLAGS)

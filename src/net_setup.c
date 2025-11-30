@@ -44,7 +44,6 @@
 #include "utils.h"
 #include "xalloc.h"
 #include "hosts_json.h"
-#include "quic/quic_transport.h"
 
 #ifdef HAVE_MINIUPNPC
 #include "upnp.h"
@@ -1285,24 +1284,6 @@ bool setup_network(void) {
 		maxoutbufsize = 10 * MTU;
 	}
 
-	/* QUIC Fallback Configuration */
-	char *fallback_str = NULL;
-	if(get_config_string(lookup_config(config_tree, "QUICFallbackToTCP"), &fallback_str)) {
-		if(!strcasecmp(fallback_str, "no")) {
-			quic_fallback_mode = 0;
-		} else if(!strcasecmp(fallback_str, "yes")) {
-			quic_fallback_mode = 1;
-		} else if(!strcasecmp(fallback_str, "auto")) {
-			quic_fallback_mode = 2;
-		} else {
-			logger(DEBUG_ALWAYS, LOG_ERR, "Invalid QUICFallbackToTCP value: %s (use no/yes/auto)", fallback_str);
-			free(fallback_str);
-			return false;
-		}
-		free(fallback_str);
-		logger(DEBUG_ALWAYS, LOG_INFO, "QUIC fallback mode: %s", quic_fallback_mode == 0 ? "no" : (quic_fallback_mode == 1 ? "yes" : "auto"));
-	}
-
 	/* VLESS Protocol Configuration */
 	get_config_bool(lookup_config(config_tree, "VLESSMode"), &vless_mode);
 
@@ -1364,85 +1345,15 @@ bool setup_network(void) {
 		}
 	}
 
-	/* QUIC Advanced Settings */
-	get_config_bool(lookup_config(config_tree, "QuicMigrationEnabled"), &quic_migration_enabled);
-
-	int hop_interval_sec = 0;
-	if(get_config_int(lookup_config(config_tree, "QuicHopInterval"), &hop_interval_sec)) {
-		quic_hop_interval_ms = hop_interval_sec * 1000; /* Convert seconds to milliseconds */
-	}
-
-	if(quic_migration_enabled) {
-		logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Connection Migration enabled (hop interval: %d seconds)",
-		       quic_hop_interval_ms / 1000);
-	}
-
-	/* QUIC Retry Settings */
-	get_config_int(lookup_config(config_tree, "QuicRetryMaxDelay"), &quic_retry_max_delay_ms);
-	get_config_int(lookup_config(config_tree, "QuicRetryInitialDelay"), &quic_retry_initial_delay_ms);
-	get_config_bool(lookup_config(config_tree, "QuicRetryJitterEnabled"), &quic_retry_jitter_enabled);
-
-	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Retry: max_delay=%dms, initial_delay=%dms, jitter=%s",
-	       quic_retry_max_delay_ms, quic_retry_initial_delay_ms,
-	       quic_retry_jitter_enabled ? "enabled" : "disabled");
-
-	/* QUIC Keep-Alive Settings */
-	get_config_bool(lookup_config(config_tree, "QuicKeepAliveEnabled"), &quic_keepalive_enabled);
-	get_config_int(lookup_config(config_tree, "QuicKeepAliveInterval"), &quic_keepalive_interval_ms);
-
-	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Keep-Alive: %s (interval=%dms)",
-	       quic_keepalive_enabled ? "enabled" : "disabled",
-	       quic_keepalive_interval_ms);
-
-	/* QUIC Session Cleanup Settings */
-	get_config_bool(lookup_config(config_tree, "QuicCleanupEnabled"), &quic_cleanup_enabled);
-	get_config_int(lookup_config(config_tree, "QuicCleanupInterval"), &quic_cleanup_interval_ms);
-	get_config_int(lookup_config(config_tree, "QuicSessionMaxIdle"), &quic_session_max_idle_ms);
-
-	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC Cleanup: %s (interval=%dms, max_idle=%dms)",
-	       quic_cleanup_enabled ? "enabled" : "disabled",
-	       quic_cleanup_interval_ms, quic_session_max_idle_ms);
-
 	if(!setup_myself()) {
-		return false;
-	}
-
-	/* Initialize QUIC transport if enabled */
-	transport_mode_t mode = TRANSPORT_UDP;  /* Default to classic UDP */
-	char *transport_mode_str = NULL;
-
-	logger(DEBUG_ALWAYS, LOG_INFO, "Checking for TransportMode configuration...");
-
-	if(get_config_string(lookup_config(config_tree, "TransportMode"), &transport_mode_str)) {
-		logger(DEBUG_ALWAYS, LOG_INFO, "Found TransportMode in config: %s", transport_mode_str);
-		if(!strcasecmp(transport_mode_str, "quic")) {
-			mode = TRANSPORT_QUIC;
-			logger(DEBUG_ALWAYS, LOG_INFO, "Setting transport mode to QUIC");
-		} else if(!strcasecmp(transport_mode_str, "hybrid")) {
-			mode = TRANSPORT_HYBRID;
-			logger(DEBUG_ALWAYS, LOG_INFO, "Setting transport mode to HYBRID");
-		} else if(!strcasecmp(transport_mode_str, "tcp")) {
-			mode = TRANSPORT_TCP;
-			logger(DEBUG_ALWAYS, LOG_INFO, "Setting transport mode to TCP");
-		} else {
-			logger(DEBUG_ALWAYS, LOG_WARNING, "Unknown TransportMode value: %s, using default UDP", transport_mode_str);
-		}
-		free(transport_mode_str);
-	} else {
-		logger(DEBUG_ALWAYS, LOG_INFO, "No TransportMode configured, using default UDP");
-	}
-
-	/* Validate QUIC + TCPonly conflict */
-	if((mode == TRANSPORT_QUIC || mode == TRANSPORT_HYBRID) && (myself->options & OPTION_TCPONLY)) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "QUIC transport mode requires UDP, but TCPonly is enabled. Disable TCPonly to use QUIC.");
 		return false;
 	}
 
 	/* Validate VLESS configuration */
 	if(vless_mode) {
-		/* VLESS requires either TCPonly or QUIC transport */
-		if(!(myself->options & OPTION_TCPONLY) && mode != TRANSPORT_QUIC && mode != TRANSPORT_HYBRID) {
-			logger(DEBUG_ALWAYS, LOG_ERR, "VLESSMode requires either TCPOnly=yes or TransportMode=quic/hybrid");
+		/* VLESS requires TCPonly mode */
+		if(!(myself->options & OPTION_TCPONLY)) {
+			logger(DEBUG_ALWAYS, LOG_ERR, "VLESSMode requires TCPOnly=yes");
 			return false;
 		}
 
@@ -1450,33 +1361,6 @@ bool setup_network(void) {
 		if(disable_sptps_with_vless) {
 			logger(DEBUG_ALWAYS, LOG_INFO, "Disabling SPTPS (using VLESS encryption instead)");
 		}
-	}
-
-	if(mode == TRANSPORT_QUIC || mode == TRANSPORT_HYBRID) {
-		logger(DEBUG_ALWAYS, LOG_INFO, "Initializing QUIC transport (mode=%d, listen_sockets=%d)...",
-		       mode, listen_sockets);
-
-		/* Pass tinc's existing UDP sockets to QUIC instead of creating separate ones */
-		if(!quic_transport_init(listen_socket, listen_sockets)) {
-			logger(DEBUG_ALWAYS, LOG_ERR, "Failed to initialize QUIC transport");
-			if(mode == TRANSPORT_QUIC) {
-				logger(DEBUG_ALWAYS, LOG_ERR, "QUIC-only mode: aborting setup");
-				return false;  /* Fatal if QUIC-only mode */
-			}
-			logger(DEBUG_ALWAYS, LOG_WARNING, "HYBRID mode: continuing with fallback to UDP");
-			/* Continue with fallback if HYBRID mode */
-		} else {
-			logger(DEBUG_ALWAYS, LOG_INFO, "QUIC transport initialized successfully");
-
-			/* Set transport mode AFTER initialization */
-			quic_transport_set_mode(mode);
-
-			/* Note: QUIC packets are now handled via packet demultiplexing
-			 * in handle_incoming_vpn_data(), not via separate socket callback */
-			logger(DEBUG_ALWAYS, LOG_INFO, "QUIC transport will use shared UDP sockets with packet demultiplexing");
-		}
-	} else {
-		logger(DEBUG_ALWAYS, LOG_INFO, "QUIC transport not enabled (mode=%d)", mode);
 	}
 
 	if(!init_control()) {
@@ -1528,11 +1412,6 @@ void close_network_connections(void) {
 		io_del(&listen_socket[i].udp);
 		close(listen_socket[i].tcp.fd);
 		close(listen_socket[i].udp.fd);
-	}
-
-	/* Cleanup QUIC transport */
-	if(quic_transport_is_enabled()) {
-		quic_transport_exit();
 	}
 
 	/* Cleanup hosts.json database */

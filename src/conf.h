@@ -53,26 +53,7 @@ extern char *vless_reality_private_key;
 extern char *vless_reality_short_id;
 extern char *vless_reality_fingerprint;
 
-extern int quic_fallback_mode;          /* 0=no, 1=yes, 2=auto */
 extern bool disable_sptps_with_vless;   /* Disable SPTPS when VLESS active */
-
-/* QUIC Advanced Settings */
-extern bool quic_migration_enabled;     /* Enable connection migration */
-extern int quic_hop_interval_ms;        /* Migration interval in milliseconds */
-
-/* QUIC Retry Settings */
-extern int quic_retry_max_delay_ms;     /* Maximum retry delay (default: 10000 = 10s) */
-extern int quic_retry_initial_delay_ms; /* Initial retry delay (default: 100ms) */
-extern bool quic_retry_jitter_enabled;  /* Add jitter to prevent thundering herd */
-
-/* QUIC Keep-Alive Settings */
-extern bool quic_keepalive_enabled;     /* Enable QUIC keep-alive pings (default: true) */
-extern int quic_keepalive_interval_ms;  /* Keep-alive interval in milliseconds (default: 15000 = 15s) */
-
-/* QUIC Session Cleanup Settings */
-extern bool quic_cleanup_enabled;       /* Enable session cleanup task (default: true) */
-extern int quic_cleanup_interval_ms;    /* Cleanup interval in milliseconds (default: 60000 = 1 minute) */
-extern int quic_session_max_idle_ms;    /* Maximum idle time before cleanup (default: 300000 = 5 minutes) */
 
 extern void init_configuration(splay_tree_t **config_tree);
 extern void exit_configuration(splay_tree_t **config_tree);

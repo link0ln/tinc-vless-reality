@@ -196,28 +196,28 @@ static bool certificates_exist(const char *cert_path, const char *key_path, cons
 /*
  * Main function: ensure certificates exist, generate if missing
  */
-bool ensure_quic_certificates(const char *confbase, const char *node_name) {
+bool ensure_tls_certificates(const char *confbase, const char *node_name) {
 	char cert_path[PATH_MAX];
 	char key_path[PATH_MAX];
 	char ca_path[PATH_MAX];
 
 	if(!confbase || !node_name) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "Invalid arguments to ensure_quic_certificates");
+		logger(DEBUG_ALWAYS, LOG_ERR, "Invalid arguments to ensure_tls_certificates");
 		return false;
 	}
 
 	/* Build file paths */
-	snprintf(cert_path, sizeof(cert_path), "%s/quic-cert.pem", confbase);
-	snprintf(key_path, sizeof(key_path), "%s/quic-key.pem", confbase);
+	snprintf(cert_path, sizeof(cert_path), "%s/tls-cert.pem", confbase);
+	snprintf(key_path, sizeof(key_path), "%s/tls-key.pem", confbase);
 	snprintf(ca_path, sizeof(ca_path), "%s/ca.crt", confbase);
 
 	/* Check if all certificates already exist */
 	if(certificates_exist(cert_path, key_path, ca_path)) {
-		logger(DEBUG_ALWAYS, LOG_INFO, "QUIC certificates found in %s", confbase);
+		logger(DEBUG_ALWAYS, LOG_INFO, "TLS certificates found in %s", confbase);
 		return true;
 	}
 
-	logger(DEBUG_ALWAYS, LOG_INFO, "Generating QUIC certificates for node '%s'...", node_name);
+	logger(DEBUG_ALWAYS, LOG_INFO, "Generating TLS certificates for node '%s'...", node_name);
 
 	/* Generate RSA key pair */
 	EVP_PKEY *pkey = generate_rsa_key(2048);
@@ -260,7 +260,7 @@ bool ensure_quic_certificates(const char *confbase, const char *node_name) {
 	X509_free(x509);
 	EVP_PKEY_free(pkey);
 
-	logger(DEBUG_ALWAYS, LOG_INFO, "QUIC certificate generation complete for node '%s'", node_name);
+	logger(DEBUG_ALWAYS, LOG_INFO, "TLS certificate generation complete for node '%s'", node_name);
 	return true;
 }
 

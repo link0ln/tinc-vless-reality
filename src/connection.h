@@ -56,9 +56,8 @@ typedef struct connection_status_t {
 	unsigned int vless_handshake_done: 1;   /* 1 if VLESS handshake completed */
 	unsigned int reality_enabled: 1;        /* 1 if Reality protocol is enabled */
 	unsigned int reality_authenticated: 1;  /* 1 if Reality authentication passed */
-	unsigned int sptps_disabled: 1;         /* 1 if SPTPS is disabled (VLESS or QUIC encryption used instead) */
-	unsigned int quic_meta: 1;              /* 1 if meta-connection is over QUIC stream */
-	unsigned int meta_protocol_initiated: 1; /* 1 if ID message has been sent (for QUIC handshake completion) */
+	unsigned int sptps_disabled: 1;         /* 1 if SPTPS is disabled (VLESS encryption used instead) */
+	unsigned int meta_protocol_initiated: 1; /* 1 if ID message has been sent */
 	unsigned int unused: 10;
 } connection_status_t;
 
@@ -120,9 +119,6 @@ typedef struct connection_t {
 	/* VLESS protocol support */
 	vless_ctx_t *vless;             /* VLESS protocol context */
 	reality_ctx_t *reality;         /* Reality protocol context (if enabled) */
-
-	/* QUIC meta-connection support */
-	int64_t quic_stream_id;         /* QUIC stream ID for meta-connection (-1 if not using QUIC) */
 } connection_t;
 
 extern list_t *connection_list;
